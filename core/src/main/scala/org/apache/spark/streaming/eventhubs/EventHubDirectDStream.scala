@@ -71,6 +71,8 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
 
   private var initialized = false
 
+  override def getProgressDir: String = this.progressDir
+
   DirectDStreamProgressTracker.registeredConnectors += this
 
   protected[streaming] override val checkpointData = new EventHubDirectDStreamCheckpointData(this)
@@ -444,6 +446,8 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
 
   // the id of the stream which is mapped from eventhubs instance
   override val streamId: Int = this.id
+
+
 }
 
 private[eventhubs] object EventHubDirectDStream {

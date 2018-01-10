@@ -380,12 +380,16 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
     ehConnectors
       .flatMap { ehConnector =>
         ehConnector.connectedInstances.map(
-          ehNameAndPartition =>
-            PathTools.makeTempFilePath(tempDirectoryStr,
+          ehNameAndPartition => {
+            val path = PathTools.makeTempFilePath(PathTools.makeTempDirectoryStr(ehConnector.getProgressDir, appName),
                                        ehConnector.streamId,
                                        ehConnector.uid,
                                        ehNameAndPartition,
-                                       timestamp))
+                                       timestamp)
+            logInfo(s"Collecting progress record: $path")
+            path
+          }
+        )
       }
       .filter(fs.exists)
   }

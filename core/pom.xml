@@ -27,12 +27,13 @@
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>azure-eventhubs-spark_2.11</artifactId>
+  <version>2.1.8</version>
   <packaging>jar</packaging>
   <dependencies>
     <dependency>
       <groupId>com.microsoft.azure</groupId>
       <artifactId>azure-eventhubs</artifactId>
-      <version>0.15.1</version>
+      <version>0.15.2</version>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>

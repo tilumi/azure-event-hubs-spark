@@ -230,7 +230,9 @@ private[spark] class EventHubsSource(
     // progressTracker is created; Second, to handle the case that we fail before we create
     // a file, we need to read the latest progress file in the directory and see if we have commit
     // the offsests (check if the timestamp matches) and then collect the files if necessary
-    progressTracker.commit(Map(uid -> committedOffsetsAndSeqNums.offsets), committedBatchId)
+    progressTracker.commit(Map(uid -> committedOffsetsAndSeqNums.offsets.map
+      { case (ehNameAndPartition, (offset, sequence)) => ehNameAndPartition -> (offset, sequence, -1L) }
+    ), committedBatchId)
     logInfo(
       s"committed offsets of batch $committedBatchId, collectedCommits:" +
         s" $committedOffsetsAndSeqNums")
@@ -252,7 +254,9 @@ private[spark] class EventHubsSource(
           }
           .values
           .head
-          .filter(_._1.eventHubName == eventHubsParams("eventhubs.name"))
+          .filter(_._1.eventHubName == eventHubsParams("eventhubs.name")).map {
+            case (ehNameAndPartition, (offset, sequence, time)) => ehNameAndPartition -> (offset, sequence)
+          }
       )
     }
   }
@@ -301,7 +305,8 @@ private[spark] class EventHubsSource(
                         uid = uid,
                         subDirs = sqlContext.sparkContext.appName,
                         uid),
-      eventHubsReceiver
+      eventHubsReceiver,
+      null
     )
   }
 

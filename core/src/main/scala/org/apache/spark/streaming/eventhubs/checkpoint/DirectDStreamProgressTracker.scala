@@ -17,17 +17,14 @@
 
 package org.apache.spark.streaming.eventhubs.checkpoint
 
-import scala.collection.mutable.ListBuffer
+import java.time.Instant
 
+import scala.collection.mutable.ListBuffer
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs._
-
-import org.apache.spark.eventhubscommon.{
-  EventHubNameAndPartition,
-  EventHubsConnector,
-  OffsetRecord
-}
-import org.apache.spark.eventhubscommon.progress.ProgressTrackerBase
+import org.apache.spark.eventhubscommon.{EventHubNameAndPartition, EventHubsConnector, OffsetRecord}
+import org.apache.spark.eventhubscommon.progress.{PathTools, ProgressTrackerBase}
+import org.apache.spark.streaming.eventhubs.EventHubDirectDStream
 
 /**
  * EventHub uses offset to indicates the startpoint of each receiver, and uses the number of
@@ -81,12 +78,15 @@ private[spark] class DirectDStreamProgressTracker private[spark] (
   private def initTempProgressFileDirectory(): Unit = {
     try {
       val fs = tempDirectoryPath.getFileSystem(hadoopConfiguration)
-      val checkpointTempDirExisted = fs.exists(tempDirectoryPath)
-      if (checkpointTempDirExisted) {
-        fs.delete(tempDirectoryPath, true)
-        logInfo(s"cleanup temp checkpoint $tempDirectoryPath")
-      }
-      fs.mkdirs(tempDirectoryPath)
+      DirectDStreamProgressTracker.registeredConnectors.foreach((connector) => {
+        val tmpPath = new Path(PathTools.makeTempDirectoryStr(connector.getProgressDir, appName))
+        val checkpointTempDirExisted = fs.exists(tmpPath)
+        if (checkpointTempDirExisted) {
+          fs.delete(tmpPath, true)
+          logInfo(s"cleanup temp checkpoint $tmpPath")
+        }
+        fs.mkdirs(tmpPath)
+      })
     } catch {
       case ex: Exception =>
         ex.printStackTrace()
@@ -148,29 +148,13 @@ private[spark] class DirectDStreamProgressTracker private[spark] (
     }
      */
     // clean temp directory
-    val allUselessTempFiles = fs
-      .listStatus(tempDirectoryPath, new PathFilter {
-        override def accept(path: Path): Boolean = fromPathToTimestamp(path) <= timestampToClean
-      })
-      .map(_.getPath)
-    if (allUselessTempFiles.nonEmpty) {
-      allUselessTempFiles
-        .groupBy(fromPathToTimestamp)
-        .toList
-        .sortWith((p1, p2) => p1._1 > p2._1)
-        .tail
-        .flatMap(_._2)
-        .foreach { filePath =>
-          logInfo(s"delete $filePath")
-          fs.delete(filePath, true)
-        }
-    }
+    cleanupTempFile(timestampToClean)
   }
 
   /**
    * commit offsetToCommit to a new progress tracking file
    */
-  override def commit(offsetToCommit: Map[String, Map[EventHubNameAndPartition, (Long, Long)]],
+  override def commit(offsetToCommit: Map[String, Map[EventHubNameAndPartition, (Long, Long, Long)]],
                       commitTime: Long): Unit = driverLock.synchronized {
     super.commit(offsetToCommit, commitTime)
   }

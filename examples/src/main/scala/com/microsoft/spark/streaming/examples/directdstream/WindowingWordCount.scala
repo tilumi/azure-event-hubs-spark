@@ -36,6 +36,7 @@ object WindowingWordCount {
       ssc,
       namespace,
       progressDir,
+      "",
       Map(eventHunName -> eventhubParams))
 
     inputDirectStream.map(receivedRecord => (new String(receivedRecord.getBody), 1)).

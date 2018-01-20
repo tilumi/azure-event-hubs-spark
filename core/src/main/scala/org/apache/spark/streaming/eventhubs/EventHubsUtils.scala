@@ -17,11 +17,11 @@
 package org.apache.spark.streaming.eventhubs
 
 import com.microsoft.azure.eventhubs.EventData
-
 import org.apache.spark.SparkConf
-import org.apache.spark.eventhubscommon.client.{ Client, EventHubsClientWrapper }
 import org.apache.spark.eventhubscommon.client.EventHubsOffsetTypes.EventHubsOffsetType
+import org.apache.spark.eventhubscommon.client.{Client, EventHubsClientWrapper}
 import org.apache.spark.streaming.StreamingContext
+import org.apache.spark.util.LongAccumulator
 
 object EventHubsUtils {
 
@@ -45,11 +45,13 @@ object EventHubsUtils {
    *                    Map[eventhubinstanceName -> Map(parameterName -> parameterValue)
    */
   def createDirectStreams(
-      ssc: StreamingContext,
-      eventHubNamespace: String,
-      progressDir: String,
-      eventParams: Predef.Map[String, Predef.Map[String, String]]): EventHubDirectDStream = {
-    val newStream = new EventHubDirectDStream(ssc, eventHubNamespace, progressDir, eventParams)
+                           ssc: StreamingContext,
+                           eventHubNamespace: String,
+                           progressDir: String,
+                           eventParams: Predef.Map[String, Predef.Map[String, String]],
+                           accumulators: Seq[LongAccumulator]): EventHubDirectDStream = {
+    val newStream = new EventHubDirectDStream(ssc, eventHubNamespace, progressDir, eventParams,
+      accumulators)
     newStream
   }
 
@@ -61,6 +63,7 @@ object EventHubsUtils {
       ssc: StreamingContext,
       eventHubNamespace: String,
       progressDir: String,
+      accumulators: Seq[LongAccumulator],
       eventParams: Predef.Map[String, Predef.Map[String, String]],
       eventHubsReceiverCreator: (Predef.Map[String, String],
                                  Int,
@@ -74,6 +77,7 @@ object EventHubsUtils {
                                               eventHubNamespace,
                                               progressDir,
                                               eventParams,
+                                              accumulators,
                                               eventHubsReceiverCreator,
                                               eventHubsClientCreator)
     newStream

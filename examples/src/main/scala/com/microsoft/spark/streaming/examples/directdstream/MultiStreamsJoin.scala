@@ -58,12 +58,14 @@ object MultiStreamsJoin {
       ssc,
       namespace1,
       progressDir,
+      "",
       eventhubParameters(name1, namespace1, policyName1, policykey1))
 
     val inputDirectStream2 = EventHubsUtils.createDirectStreams(
       ssc,
       namespace2,
       progressDir,
+      "",
       eventhubParameters(name2, namespace2, policyName2, policykey2))
 
     val kv1 = inputDirectStream1.map(receivedRecord => (new String(receivedRecord.getBody), 1))

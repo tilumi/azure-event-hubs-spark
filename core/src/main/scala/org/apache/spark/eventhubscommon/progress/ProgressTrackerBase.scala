@@ -17,22 +17,18 @@
 
 package org.apache.spark.eventhubscommon.progress
 
-import java.io.{ BufferedReader, InputStreamReader, IOException }
-import java.util.concurrent.{ ScheduledFuture, ScheduledThreadPoolExecutor, TimeUnit }
+import java.io.{BufferedReader, IOException, InputStreamReader}
+import java.time.Instant
+import java.util.concurrent.{ScheduledFuture, ScheduledThreadPoolExecutor, TimeUnit}
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-
 import com.microsoft.azure.eventhubs.PartitionReceiver
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs._
-
-import org.apache.spark.eventhubscommon.{
-  EventHubNameAndPartition,
-  EventHubsConnector,
-  OffsetRecord
-}
+import org.apache.spark.eventhubscommon.{EventHubNameAndPartition, EventHubsConnector, OffsetRecord}
 import org.apache.spark.internal.Logging
+import org.apache.spark.streaming.eventhubs.checkpoint.DirectDStreamProgressTracker
 
 private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
     progressDir: String,
@@ -284,7 +280,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   }
 
   private def createProgressFile(
-      offsetToCommit: Map[String, Map[EventHubNameAndPartition, (Long, Long)]],
+      offsetToCommit: Map[String, Map[EventHubNameAndPartition, (Long, Long, Long)]],
       fs: FileSystem,
       commitTime: Long): Boolean = {
     var oos: FSDataOutputStream = null
@@ -296,14 +292,15 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
       offsetToCommit.foreach {
         case (namespace, ehNameAndPartitionToOffsetAndSeq) =>
           ehNameAndPartitionToOffsetAndSeq.foreach {
-            case (nameAndPartitionId, (offset, seq)) =>
+            case (nameAndPartitionId, (offset, seq, time)) =>
               oos.writeBytes(
                 ProgressRecord(commitTime,
                                namespace,
                                nameAndPartitionId.eventHubName,
                                nameAndPartitionId.partitionId,
                                offset,
-                               seq).toString + "\n"
+                               seq,
+                               time).toString + "\n"
               )
           }
       }
@@ -338,7 +335,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   }
 
   // write offsetToCommit to a progress tracking file
-  private def transaction(offsetToCommit: Map[String, Map[EventHubNameAndPartition, (Long, Long)]],
+  private def transaction(offsetToCommit: Map[String, Map[EventHubNameAndPartition, (Long, Long, Long)]],
                           fs: FileSystem,
                           commitTime: Long): Unit = {
     if (createProgressFile(offsetToCommit, fs, commitTime)) {
@@ -359,7 +356,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   /**
    * commit offsetToCommit to a new progress tracking file
    */
-  def commit(offsetToCommit: Map[String, Map[EventHubNameAndPartition, (Long, Long)]],
+  def commit(offsetToCommit: Map[String, Map[EventHubNameAndPartition, (Long, Long, Long)]],
              commitTime: Long): Unit = {
     val fs = new Path(progressDir).getFileSystem(hadoopConfiguration)
     try {
@@ -380,12 +377,16 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
     ehConnectors
       .flatMap { ehConnector =>
         ehConnector.connectedInstances.map(
-          ehNameAndPartition =>
-            PathTools.makeTempFilePath(tempDirectoryStr,
+          ehNameAndPartition => {
+            val path = PathTools.makeTempFilePath(PathTools.makeTempDirectoryStr(ehConnector.getProgressDir, appName),
                                        ehConnector.streamId,
                                        ehConnector.uid,
                                        ehNameAndPartition,
-                                       timestamp))
+                                       timestamp)
+            logInfo(s"Collecting progress record: $path")
+            path
+          }
+        )
       }
       .filter(fs.exists)
   }
@@ -395,9 +396,9 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
    * @return Map(Namespace -> Map(EventHubNameAndPartition -> (Offset, Seq))
    */
   def collectProgressRecordsForBatch(timestamp: Long, ehConnectors: List[EventHubsConnector])
-    : Map[String, Map[EventHubNameAndPartition, (Long, Long)]] = {
+    : Map[String, Map[EventHubNameAndPartition, (Long, Long, Long)]] = {
     val records = new ListBuffer[ProgressRecord]
-    val ret = new mutable.HashMap[String, Map[EventHubNameAndPartition, (Long, Long)]]
+    val ret = new mutable.HashMap[String, Map[EventHubNameAndPartition, (Long, Long, Long)]]
     try {
       val fs = tempDirectoryPath.getFileSystem(hadoopConfiguration)
       val files = allProgressRecords(timestamp, ehConnectors).iterator
@@ -428,7 +429,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
     records.foreach { progressRecord =>
       val newMap = ret.getOrElseUpdate(progressRecord.uid, Map()) +
         (EventHubNameAndPartition(progressRecord.eventHubName, progressRecord.partitionId) ->
-          (progressRecord.offset, progressRecord.seqId))
+          (progressRecord.offset, progressRecord.seqId, progressRecord.enqueueTime))
       ret(progressRecord.uid) = newMap
     }
     ret.toMap
@@ -452,23 +453,32 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
       }
     }
     // clean temp directory
-    val allUselessTempFiles = fs
-      .listStatus(tempDirectoryPath, new PathFilter {
-        override def accept(path: Path): Boolean = fromPathToTimestamp(path) <= timestampToClean
-      })
-      .map(_.getPath)
-    if (allUselessTempFiles.nonEmpty) {
-      allUselessTempFiles
-        .groupBy(fromPathToTimestamp)
-        .toList
-        .sortWith((p1, p2) => p1._1 > p2._1)
-        .tail
-        .flatMap(_._2)
-        .foreach { filePath =>
+    cleanupTempFile(timestampToClean)
+  }
+
+  protected def cleanupTempFile(timestampToClean: Long) = {
+    val fs = progressDirectoryPath.getFileSystem(hadoopConfiguration)
+    val allEventDStreams = DirectDStreamProgressTracker.registeredConnectors
+    allEventDStreams.foreach((connector) => {
+      val allUselessTempFiles = fs
+        .listStatus(new Path(PathTools.makeTempDirectoryStr(connector.getProgressDir, appName)), new PathFilter {
+          override def accept(path: Path): Boolean = fromPathToTimestamp(path) <= timestampToClean
+        })
+        .map(_.getPath)
+//      logInfo(s"Useless temp files: ${allUselessTempFiles.mkString("\n")}")
+      if (allUselessTempFiles.nonEmpty) {
+        val filesToDelete = allUselessTempFiles
+          .groupBy(fromPathToTimestamp)
+          .toList
+          .sortWith((p1, p2) => p1._1 > p2._1)
+          .tail
+          .flatMap(_._2)
+        filesToDelete.foreach { filePath =>
           logInfo(s"delete $filePath")
           fs.delete(filePath, true)
         }
-    }
+      }
+    })
   }
 
   private def scheduleMetadataCleanTask(): ScheduledFuture[_] = {

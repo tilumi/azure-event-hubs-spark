@@ -18,10 +18,10 @@
 package org.apache.spark.eventhubscommon.progress
 
 import java.io.IOException
+import java.time.Instant
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{ FSDataOutputStream, Path }
-
+import org.apache.hadoop.fs.{FSDataOutputStream, Path}
 import org.apache.spark.eventhubscommon.EventHubNameAndPartition
 import org.apache.spark.internal.Logging
 
@@ -44,7 +44,7 @@ private[spark] class ProgressWriter(streamId: Int,
   // TODO: Come up with better name for this guy
   private[spark] val tempProgressTrackingPointPath = new Path(tempProgressTrackingPointStr)
 
-  def write(recordTime: Long, cpOffset: Long, cpSeq: Long): Unit = {
+  def write(recordTime: Long, cpOffset: Long, cpSeq: Long, cpTime: Long): Unit = {
     val fs = tempProgressTrackingPointPath.getFileSystem(hadoopConfiguration)
     var cpFileStream: FSDataOutputStream = null
     try {
@@ -56,7 +56,8 @@ private[spark] class ProgressWriter(streamId: Int,
                                   eventHubNameAndPartition.eventHubName,
                                   eventHubNameAndPartition.partitionId,
                                   cpOffset,
-                                  cpSeq)
+                                  cpSeq,
+                                  cpTime)
       cpFileStream.writeBytes(s"$record")
     } catch {
       case ioe: IOException =>

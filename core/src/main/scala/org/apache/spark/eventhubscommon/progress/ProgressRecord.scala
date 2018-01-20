@@ -17,6 +17,8 @@
 
 package org.apache.spark.eventhubscommon.progress
 
+import java.time.Instant
+
 /**
  * this class represent the record written by ProgressWriter and read by ProgressTracker
  * this class is supposed to only be used by the classes within checkpoint package
@@ -33,9 +35,10 @@ private[spark] case class ProgressRecord(timestamp: Long,
                                          eventHubName: String,
                                          partitionId: Int,
                                          offset: Long,
-                                         seqId: Long) {
+                                         seqId: Long,
+                                         enqueueTime: Long) {
   override def toString: String = {
-    s"$timestamp $uid $eventHubName $partitionId $offset $seqId"
+    s"$timestamp $uid $eventHubName $partitionId $offset $seqId ${if (enqueueTime > -1) enqueueTime else 0 }"
   }
 }
 
@@ -43,7 +46,7 @@ private[spark] object ProgressRecord {
 
   def parse(line: String): Option[ProgressRecord] = {
     try {
-      val Array(timestampStr, namespace, eventHubName, partitionIdStr, offsetStr, seqStr) =
+      val Array(timestampStr, namespace, eventHubName, partitionIdStr, offsetStr, seqStr, enqueueTimeStr) =
         line.split(" ")
       Some(
         ProgressRecord(timestampStr.toLong,
@@ -51,7 +54,8 @@ private[spark] object ProgressRecord {
                        eventHubName,
                        partitionIdStr.toInt,
                        offsetStr.toLong,
-                       seqStr.toLong))
+                       seqStr.toLong,
+                       enqueueTimeStr.toLong))
     } catch {
       case m: RuntimeException =>
         m.printStackTrace()

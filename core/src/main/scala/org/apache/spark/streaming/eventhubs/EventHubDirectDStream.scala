@@ -17,28 +17,23 @@
 
 package org.apache.spark.streaming.eventhubs
 
-import java.io.{ IOException, ObjectInputStream }
-
-import scala.collection.mutable
+import java.io.{IOException, ObjectInputStream}
 
 import com.microsoft.azure.eventhubs.EventData
-
 import org.apache.spark.eventhubscommon._
-import org.apache.spark.eventhubscommon.client.{
-  AMQPEventHubsClient,
-  Client,
-  EventHubsClientWrapper
-}
 import org.apache.spark.eventhubscommon.client.EventHubsOffsetTypes.EventHubsOffsetType
-import org.apache.spark.eventhubscommon.rdd.{ EventHubsRDD, OffsetRange, OffsetStoreParams }
+import org.apache.spark.eventhubscommon.client.{AMQPEventHubsClient, Client, EventHubsClientWrapper}
+import org.apache.spark.eventhubscommon.rdd.{EventHubsRDD, OffsetRange, OffsetStoreParams}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.streaming.{ StreamingContext, Time }
-import org.apache.spark.streaming.dstream.{ DStreamCheckpointData, InputDStream }
+import org.apache.spark.streaming.dstream.{DStreamCheckpointData, InputDStream}
 import org.apache.spark.streaming.eventhubs.checkpoint._
-import org.apache.spark.streaming.scheduler.{ RateController, StreamInputInfo }
 import org.apache.spark.streaming.scheduler.rate.RateEstimator
-import org.apache.spark.util.Utils
+import org.apache.spark.streaming.scheduler.{RateController, StreamInputInfo}
+import org.apache.spark.streaming.{StreamingContext, Time}
+import org.apache.spark.util.{LongAccumulator, Utils}
+
+import scala.collection.mutable
 
 /**
  * implementation of EventHub-based direct stream
@@ -49,17 +44,18 @@ import org.apache.spark.util.Utils
  *                    Map[eventhubinstanceName -> Map(parameterName -> parameterValue)
  */
 private[eventhubs] class EventHubDirectDStream private[eventhubs] (
-    _ssc: StreamingContext,
-    private[eventhubs] val eventHubNameSpace: String,
-    progressDir: String,
-    eventhubsParams: Map[String, Map[String, String]],
-    eventhubReceiverCreator: (Map[String, String],
+                                                                    _ssc: StreamingContext,
+                                                                    private[eventhubs] val eventHubNameSpace: String,
+                                                                    progressDir: String,
+                                                                    eventhubsParams: Map[String, Map[String, String]],
+                                                                    accumulators: Seq[LongAccumulator],
+                                                                    eventhubReceiverCreator: (Map[String, String],
                               Int,
                               Long,
                               EventHubsOffsetType,
                               Int) => EventHubsClientWrapper =
       EventHubsClientWrapper.getEventHubReceiver,
-    eventhubClientCreator: (String, Map[String, Map[String, String]]) => Client =
+                                                                    eventhubClientCreator: (String, Map[String, Map[String, String]]) => Client =
       AMQPEventHubsClient.getInstance)
     extends InputDStream[EventData](_ssc)
     with EventHubsConnector
@@ -70,6 +66,8 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
   private var latestCheckpointTime: Time = _
 
   private var initialized = false
+
+  override def getProgressDir: String = this.progressDir
 
   DirectDStreamProgressTracker.registeredConnectors += this
 
@@ -283,8 +281,8 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
     // normal processing
     validatePartitions(validTime, startOffsetInNextBatch.offsets.keys.toList)
     currentOffsetsAndSeqNums = startOffsetInNextBatch
-    logInfo(s"starting batch at $validTime with $startOffsetInNextBatch")
     val offsetRanges = composeOffsetRange(startOffsetInNextBatch, highestOffsetOfAllPartitions)
+    logInfo(s"${this.uid}: starting batch at $validTime with offsetRanges: $offsetRanges")
     val eventHubRDD = new EventHubsRDD(
       context.sparkContext,
       eventhubsParams,
@@ -294,7 +292,8 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
                         streamId,
                         uid = eventHubNameSpace,
                         subDirs = ssc.sparkContext.appName),
-      eventhubReceiverCreator
+      eventhubReceiverCreator,
+      accumulators
     )
     reportInputInto(validTime,
                     offsetRanges,
@@ -344,11 +343,15 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
   }
 
   override def compute(validTime: Time): Option[RDD[EventData]] = {
+    logInfo("Start compute")
+//    Thread.dumpStack()
     if (!initialized) {
       ProgressTrackingListener.initInstance(ssc, progressDir)
     }
+    logInfo("Before compute 1")
     require(progressTracker != null, "ProgressTracker hasn't been initialized")
     var startPointRecord = fetchStartOffsetForEachPartition(validTime, !initialized)
+    logInfo("Before compute 2")
     while (startPointRecord.timestamp < validTime.milliseconds -
              ssc.graph.batchDuration.milliseconds) {
       logInfo(
@@ -358,6 +361,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
       logInfo(s"wake up at Batch ${validTime.milliseconds} at DStream $id")
       startPointRecord = fetchStartOffsetForEachPartition(validTime, !initialized)
     }
+    logInfo("Before compute 3")
     // we need to update highest offset after we skip or get out from the while loop, because
     // 1) when the user pass in filtering params they may have received events whose seq number
     // is higher than the saved one -> leads to an exception;
@@ -429,7 +433,8 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
             }.toList,
             t.milliseconds,
             OffsetStoreParams(progressDir, streamId, uid = eventHubNameSpace, subDirs = appName),
-            eventhubReceiverCreator
+            eventhubReceiverCreator,
+            accumulators
           )
       }
     }
@@ -444,6 +449,8 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
 
   // the id of the stream which is mapped from eventhubs instance
   override val streamId: Int = this.id
+
+
 }
 
 private[eventhubs] object EventHubDirectDStream {

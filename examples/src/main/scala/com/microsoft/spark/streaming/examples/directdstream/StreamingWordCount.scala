@@ -56,6 +56,7 @@ object StreamingWordCount {
       ssc,
       eventHubNamespace,
       progressDir,
+      "",
       Map(eventHubName -> eventhubParameters))
 
     inputDirectStream.foreachRDD { rdd =>

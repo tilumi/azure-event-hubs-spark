@@ -344,7 +344,6 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
 
   override def compute(validTime: Time): Option[RDD[EventData]] = {
     logInfo("Start compute")
-//    Thread.dumpStack()
     if (!initialized) {
       ProgressTrackingListener.initInstance(ssc, progressDir)
     }

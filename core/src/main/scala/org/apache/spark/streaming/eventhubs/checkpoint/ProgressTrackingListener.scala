@@ -17,10 +17,12 @@
 
 package org.apache.spark.streaming.eventhubs.checkpoint
 
+import java.util.function.Consumer
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.streaming.eventhubs.EventHubDirectDStream
-import org.apache.spark.streaming.scheduler.{ StreamingListener, StreamingListenerBatchCompleted }
+import org.apache.spark.streaming.scheduler.{StreamingListener, StreamingListenerBatchCompleted}
 
 /**
  * The listener asynchronously commits the temp checkpoint to the path which is read by DStream
@@ -86,6 +88,7 @@ private[eventhubs] object ProgressTrackingListener {
                                                  progressDirectory: String) = {
     if (_progressTrackerListener == null) {
       _progressTrackerListener = new ProgressTrackingListener(ssc, progressDirectory)
+      _progressTrackerListener.logInfo("Set progressTrackerListerner to listenerBus")
       ssc.scheduler.listenerBus.listeners.add(0, _progressTrackerListener)
     }
     _progressTrackerListener

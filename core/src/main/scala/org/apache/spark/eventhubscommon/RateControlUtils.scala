@@ -122,12 +122,12 @@ private[spark] object RateControlUtils extends Logging {
               .getOrElse("eventhubs.filter.enqueuetime", Long.MinValue.toString)
               .toLong
         }
-        require(
-          latestEnqueueTime >= passInEnqueueTime,
-          "you cannot pass in an enqueue time which is later than the highest enqueue time in" +
-            s" event hubs, ($ehNameAndPartition, pass-in-enqueuetime $passInEnqueueTime," +
-            s" latest-enqueuetime $latestEnqueueTime)"
-        )
+//        require(
+//          latestEnqueueTime >= passInEnqueueTime,
+//          "you cannot pass in an enqueue time which is later than the highest enqueue time in" +
+//            s" event hubs, ($ehNameAndPartition, pass-in-enqueuetime $passInEnqueueTime," +
+//            s" latest-enqueuetime $latestEnqueueTime)"
+//        )
     }
   }
 

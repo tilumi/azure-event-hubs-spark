@@ -33,7 +33,7 @@
     <dependency>
       <groupId>com.microsoft.azure</groupId>
       <artifactId>azure-eventhubs</artifactId>
-      <version>0.15.2</version>
+      <version>0.15.1</version>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>

@@ -490,12 +490,15 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
           (f1, f2) =>
             f1.getPath.getName.toLong <
               f2.getPath.getName.toLong)
-        sortedMetadataFiles.take(math.max(sortedMetadataFiles.length - 1, 0)).map { file =>
+        logInfo("clean metadata")
+        sortedMetadataFiles.tail.map { file =>
+          logInfo(s"delete metadata: ${file.getPath}")
           fs.delete(file.getPath, true)
         }
       }
     }
     // do not need to expose internals to users so hardcoded
+    logInfo("schedule clean metadata task")
     threadPoolForMetadataClean.scheduleAtFixedRate(metadataCleanTask, 0, 30, TimeUnit.SECONDS)
   }
 

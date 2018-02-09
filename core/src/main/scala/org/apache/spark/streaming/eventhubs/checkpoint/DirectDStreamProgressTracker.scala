@@ -130,7 +130,6 @@ private[spark] class DirectDStreamProgressTracker private[spark] (
 
   // called in EventHubDirectDStream's clearCheckpointData method
   override def cleanProgressFile(timestampToClean: Long): Unit = driverLock.synchronized {
-    val fs = progressDirectoryPath.getFileSystem(hadoopConfiguration)
     // clean progress directory
     // NOTE: due to SPARK-19280 (https://issues.apache.org/jira/browse/SPARK-19280)
     // we have to disable cleanup thread

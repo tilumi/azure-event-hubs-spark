@@ -465,7 +465,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
           override def accept(path: Path): Boolean = fromPathToTimestamp(path) <= timestampToClean
         })
         .map(_.getPath)
-//      logInfo(s"Useless temp files: ${allUselessTempFiles.mkString("\n")}")
+      logInfo(s"Useless temp files: ${allUselessTempFiles.mkString("\n")}")
       if (allUselessTempFiles.nonEmpty) {
         val filesToDelete = allUselessTempFiles
           .groupBy(fromPathToTimestamp)

@@ -484,6 +484,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   private def scheduleMetadataCleanTask(): ScheduledFuture[_] = {
     val metadataCleanTask = new Runnable {
       override def run(): Unit = {
+        logInfo("metadata clean task run")
         val fs = metadataDirectoryPath.getFileSystem(new Configuration())
         val allMetadataFiles = fs.listStatus(metadataDirectoryPath)
         val sortedMetadataFiles = allMetadataFiles.sortWith(

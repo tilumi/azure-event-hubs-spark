@@ -128,26 +128,6 @@ private[spark] class DirectDStreamProgressTracker private[spark] (
 
   def close(): Unit = {}
 
-  // called in EventHubDirectDStream's clearCheckpointData method
-//  override def cleanProgressFile(timestampToClean: Long): Unit = driverLock.synchronized {
-//    // clean progress directory
-//    // NOTE: due to SPARK-19280 (https://issues.apache.org/jira/browse/SPARK-19280)
-//    // we have to disable cleanup thread
-//    val allUselessFiles = fs.listStatus(progressDirectoryPath, new PathFilter {
-//      override def accept(path: Path): Boolean = fromPathToTimestamp(path) <= checkpointTime
-//    }).map(_.getPath)
-//    val sortedFileList = allUselessFiles.sortWith((p1, p2) => fromPathToTimestamp(p1) >
-//      fromPathToTimestamp(p2))
-//    if (sortedFileList.nonEmpty) {
-//      sortedFileList.tail.foreach { filePath =>
-//        logInfo(s"delete $filePath")
-//        fs.delete(filePath, true)
-//      }
-//    }
-//    // clean temp directory
-//    cleanupTempFile(timestampToClean)
-//  }
-
   /**
    * commit offsetToCommit to a new progress tracking file
    */
@@ -165,7 +145,7 @@ object DirectDStreamProgressTracker {
 
   private[spark] def reset(): Unit = {
     registeredConnectors.clear()
-    _progressTracker.metadataCleanupFuture.cancel(true)
+//    _progressTracker.metadataCleanupFuture.cancel(true)
     _progressTracker = null
   }
 

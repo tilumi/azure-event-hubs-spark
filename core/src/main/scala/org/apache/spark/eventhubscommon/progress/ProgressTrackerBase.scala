@@ -72,16 +72,20 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   // no metadata (for backward compatibility)
   private def getLatestFileWithoutMetadata(fs: FileSystem,
                                            timestamp: Long = Long.MaxValue): Option[Path] = {
-    val allFiles = fs.listStatus(progressDirectoryPath)
-    if (allFiles.length < 1) {
-      None
+    if (fs.exists(progressDirectoryPath)) {
+      val allFiles = fs.listStatus(progressDirectoryPath)
+      if (allFiles.length < 1) {
+        None
+      } else {
+        Some(
+          allFiles
+            .filter(fsStatus => fromPathToTimestamp(fsStatus.getPath) <= timestamp)
+            .sortWith((f1, f2) => fromPathToTimestamp(f1.getPath) > fromPathToTimestamp(f2.getPath))(
+              0)
+            .getPath)
+      }
     } else {
-      Some(
-        allFiles
-          .filter(fsStatus => fromPathToTimestamp(fsStatus.getPath) <= timestamp)
-          .sortWith((f1, f2) => fromPathToTimestamp(f1.getPath) > fromPathToTimestamp(f2.getPath))(
-            0)
-          .getPath)
+      None
     }
   }
 

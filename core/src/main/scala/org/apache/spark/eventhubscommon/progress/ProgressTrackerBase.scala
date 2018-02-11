@@ -454,7 +454,6 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
           fromPathToTimestamp(p2))
     if (sortedFileList.nonEmpty) {
       sortedFileList.tail.foreach { filePath =>
-        logInfo(s"delete $filePath")
         fs.delete(filePath, true)
       }
     }
@@ -471,7 +470,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
           override def accept(path: Path): Boolean = fromPathToTimestamp(path) <= timestampToClean
         })
         .map(_.getPath)
-      logInfo(s"Useless temp files: ${allUselessTempFiles.mkString("\n")}")
+      logDebug(s"Useless temp files: ${allUselessTempFiles.mkString("\n")}")
       if (allUselessTempFiles.nonEmpty) {
         val filesToDelete = allUselessTempFiles
           .groupBy(fromPathToTimestamp)
@@ -480,7 +479,6 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
           .tail
           .flatMap(_._2)
         filesToDelete.foreach { filePath =>
-          logInfo(s"delete $filePath")
           fs.delete(filePath, true)
         }
       }
@@ -492,18 +490,14 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
       override def run(): Unit = {
         Try {
           logWarning("metadata clean task run")
-          logWarning(s"metadataDirectoryPath: $metadataDirectoryPath")
           val fs = metadataDirectoryPath.getFileSystem(new Configuration())
           if (fs.exists(metadataDirectoryPath)) {
             val allMetadataFiles = fs.listStatus(metadataDirectoryPath)
-            logWarning(s"allMetadataFiles: ${allMetadataFiles.map(_.getPath.getName).mkString(",")}")
             val sortedMetadataFiles = allMetadataFiles.sortWith(
               (f1, f2) =>
                 f1.getPath.getName.toLong <
                   f2.getPath.getName.toLong)
-            logWarning("clean metadata")
             sortedMetadataFiles.tail.map { file =>
-              logWarning(s"delete metadata: ${file.getPath}")
               fs.delete(file.getPath, true)
             }
           }
@@ -515,7 +509,6 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
       }
     }
     // do not need to expose internals to users so hardcoded
-    logInfo("schedule clean metadata task")
     threadPoolForMetadataClean.scheduleAtFixedRate(metadataCleanTask, 0, 30, TimeUnit.SECONDS)
   }
 

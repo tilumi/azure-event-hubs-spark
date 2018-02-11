@@ -488,19 +488,25 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   private def scheduleMetadataCleanTask(): ScheduledFuture[_] = {
     val metadataCleanTask = new Runnable {
       override def run(): Unit = {
-        logWarning("metadata clean task run")
-        logWarning(s"metadataDirectoryPath: $metadataDirectoryPath")
-        val fs = metadataDirectoryPath.getFileSystem(new Configuration())
-        val allMetadataFiles = fs.listStatus(metadataDirectoryPath)
-        logWarning(s"allMetadataFiles: ${allMetadataFiles.map(_.getPath.getName).mkString(",")}")
-        val sortedMetadataFiles = allMetadataFiles.sortWith(
-          (f1, f2) =>
-            f1.getPath.getName.toLong <
-              f2.getPath.getName.toLong)
-        logWarning("clean metadata")
-        sortedMetadataFiles.tail.map { file =>
-          logWarning(s"delete metadata: ${file.getPath}")
-          fs.delete(file.getPath, true)
+        try {
+          logWarning("metadata clean task run")
+          logWarning(s"metadataDirectoryPath: $metadataDirectoryPath")
+          val fs = metadataDirectoryPath.getFileSystem(new Configuration())
+          val allMetadataFiles = fs.listStatus(metadataDirectoryPath)
+          logWarning(s"allMetadataFiles: ${allMetadataFiles.map(_.getPath.getName).mkString(",")}")
+          val sortedMetadataFiles = allMetadataFiles.sortWith(
+            (f1, f2) =>
+              f1.getPath.getName.toLong <
+                f2.getPath.getName.toLong)
+          logWarning("clean metadata")
+          sortedMetadataFiles.tail.map { file =>
+            logWarning(s"delete metadata: ${file.getPath}")
+            fs.delete(file.getPath, true)
+          }
+        } catch {
+          case e: Throwable =>
+            logInfo("clean metadata fail", e)
+
         }
       }
     }

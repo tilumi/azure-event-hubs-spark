@@ -30,6 +30,8 @@ import org.apache.spark.eventhubscommon.{EventHubNameAndPartition, EventHubsConn
 import org.apache.spark.internal.Logging
 import org.apache.spark.streaming.eventhubs.checkpoint.DirectDStreamProgressTracker
 
+import scala.util.{Failure, Success, Try}
+
 private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
     progressDir: String,
     appName: String,
@@ -488,25 +490,27 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   private def scheduleMetadataCleanTask(): ScheduledFuture[_] = {
     val metadataCleanTask = new Runnable {
       override def run(): Unit = {
-        try {
+        Try {
           logWarning("metadata clean task run")
           logWarning(s"metadataDirectoryPath: $metadataDirectoryPath")
           val fs = metadataDirectoryPath.getFileSystem(new Configuration())
-          val allMetadataFiles = fs.listStatus(metadataDirectoryPath)
-          logWarning(s"allMetadataFiles: ${allMetadataFiles.map(_.getPath.getName).mkString(",")}")
-          val sortedMetadataFiles = allMetadataFiles.sortWith(
-            (f1, f2) =>
-              f1.getPath.getName.toLong <
-                f2.getPath.getName.toLong)
-          logWarning("clean metadata")
-          sortedMetadataFiles.tail.map { file =>
-            logWarning(s"delete metadata: ${file.getPath}")
-            fs.delete(file.getPath, true)
+          if (fs.exists(metadataDirectoryPath)) {
+            val allMetadataFiles = fs.listStatus(metadataDirectoryPath)
+            logWarning(s"allMetadataFiles: ${allMetadataFiles.map(_.getPath.getName).mkString(",")}")
+            val sortedMetadataFiles = allMetadataFiles.sortWith(
+              (f1, f2) =>
+                f1.getPath.getName.toLong <
+                  f2.getPath.getName.toLong)
+            logWarning("clean metadata")
+            sortedMetadataFiles.tail.map { file =>
+              logWarning(s"delete metadata: ${file.getPath}")
+              fs.delete(file.getPath, true)
+            }
           }
-        } catch {
-          case e: Throwable =>
-            logInfo("clean metadata fail", e)
-
+        } match {
+          case Failure(exception: Throwable) =>
+            logInfo("clean metadata fail", exception)
+          case _ =>
         }
       }
     }

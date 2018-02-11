@@ -97,8 +97,8 @@ private[spark] class DirectDStreamProgressTracker private[spark] (
   private def initMetadataDirectory(): Unit = {
     try {
       val fs = metadataDirectoryPath.getFileSystem(hadoopConfiguration)
-      val checkpointMetadaDirExisted = fs.exists(tempDirectoryPath)
-      if (!checkpointMetadaDirExisted) {
+      val checkpointMetadataDirExisted = fs.exists(metadataDirectoryPath)
+      if (!checkpointMetadataDirExisted) {
         fs.mkdirs(metadataDirectoryPath)
       }
     } catch {

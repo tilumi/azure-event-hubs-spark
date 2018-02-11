@@ -18,17 +18,17 @@
 package org.apache.spark.eventhubscommon.progress
 
 import java.io.{BufferedReader, IOException, InputStreamReader}
-import java.time.Instant
 import java.util.concurrent.{ScheduledFuture, ScheduledThreadPoolExecutor, TimeUnit}
 
-import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 import com.microsoft.azure.eventhubs.PartitionReceiver
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs._
 import org.apache.spark.eventhubscommon.{EventHubNameAndPartition, EventHubsConnector, OffsetRecord}
 import org.apache.spark.internal.Logging
 import org.apache.spark.streaming.eventhubs.checkpoint.DirectDStreamProgressTracker
+
+import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 
 private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
     progressDir: String,
@@ -320,29 +320,30 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
     }
   }
 
-  private def createMetadata(fs: FileSystem, commitTime: Long): Boolean = {
-    var oos: FSDataOutputStream = null
-    try {
-      oos = fs.create(
-        new Path(s"$metadataDirectoryStr/" + s"${PathTools.makeMetadataFileName(commitTime)}"),
-        true)
-      true
-    } catch {
-      case e: Exception =>
-        e.printStackTrace()
-        false
-    } finally {
-      if (oos != null) {
-        oos.close()
-      }
-    }
-  }
+//  private def createMetadata(fs: FileSystem, commitTime: Long): Boolean = {
+//    var oos: FSDataOutputStream = null
+//    try {
+//      oos = fs.create(
+//        new Path(s"$metadataDirectoryStr/" + s"${PathTools.makeMetadataFileName(commitTime)}"),
+//        true)
+//      true
+//    } catch {
+//      case e: Exception =>
+//        e.printStackTrace()
+//        false
+//    } finally {
+//      if (oos != null) {
+//        oos.close()
+//      }
+//    }
+//  }
 
   // write offsetToCommit to a progress tracking file
   private def transaction(offsetToCommit: Map[String, Map[EventHubNameAndPartition, (Long, Long, Long)]],
                           fs: FileSystem,
                           commitTime: Long): Unit = {
     if (createProgressFile(offsetToCommit, fs, commitTime)) {
+      logInfo(s"create progress file for $commitTime")
 //      if (!createMetadata(fs, commitTime)) {
 //        logError(s"cannot create progress file at $commitTime")
 //        throw new IOException(

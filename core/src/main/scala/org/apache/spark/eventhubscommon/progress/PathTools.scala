@@ -44,9 +44,6 @@ private[spark] object PathTools extends Serializable {
   def makeMetadataDirectoryStr(progressDir: String, subDirNames: String*): String =
     s"$progressDir/${combineDirectoryNames(subDirNames)}_metadata"
 
-  def makeMetadataDirectoryPath(progressDir: String, subDirNames: String*): Path =
-    new Path(s"$progressDir/${combineDirectoryNames(subDirNames)}_metadata")
-
   def makeProgressFileName(timestamp: Long): String =
     s"progress-$timestamp"
 

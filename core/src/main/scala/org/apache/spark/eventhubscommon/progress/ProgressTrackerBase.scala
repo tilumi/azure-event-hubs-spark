@@ -19,7 +19,7 @@ package org.apache.spark.eventhubscommon.progress
 
 import java.io.{BufferedReader, IOException, InputStreamReader}
 import java.time.Instant
-import java.util.concurrent.{ScheduledFuture, ScheduledThreadPoolExecutor, TimeUnit}
+import java.util.concurrent._
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -53,7 +53,13 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   // Metadata is maintained for fast ProgressTracker initialization and can cleaned independently
   // from Spark checkpoint files. We'll clean metadata here to ensure it's cleaned whether or not
   // Spark checkpointing is enabled.
-  private val threadPoolForMetadataClean = new ScheduledThreadPoolExecutor(1)
+  private val threadPoolForMetadataClean = new ScheduledThreadPoolExecutor(1, new ThreadFactory() {
+    override def newThread(r: Runnable): Thread = {
+      val t: Thread = Executors.defaultThreadFactory.newThread(r)
+      t.setDaemon(true)
+      t
+    }
+  })
   protected val metadataCleanupFuture: ScheduledFuture[_] = scheduleMetadataCleanTask()
 
   // getModificationTime is not reliable for unit test and some extreme case in distributed

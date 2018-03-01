@@ -506,7 +506,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
               (f1, f2) =>
                 f1.getPath.getName.toLong <
                   f2.getPath.getName.toLong)
-            sortedMetadataFiles.tail.map { file =>
+            sortedMetadataFiles.take(math.max(sortedMetadataFiles.length - 1, 0)).map { file =>
               fs.delete(file.getPath, true)
             }
           }

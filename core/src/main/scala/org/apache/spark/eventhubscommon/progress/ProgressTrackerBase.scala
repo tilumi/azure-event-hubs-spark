@@ -351,11 +351,14 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
                           fs: FileSystem,
                           commitTime: Long): Unit = {
     if (createProgressFile(offsetToCommit, fs, commitTime)) {
+      logInfo(s"Created progress file at $commitTime")
       if (!createMetadata(fs, commitTime)) {
-        logError(s"cannot create progress file at $commitTime")
+        logError(s"cannot create metadata file at $commitTime")
         throw new IOException(
           s"cannot create metadata file at $commitTime," +
             s" check the previous exception for the root cause")
+      } else {
+        logInfo(s"Created metadata file at $commitTime")
       }
     } else {
       logError(s"cannot create progress file at $commitTime")

@@ -156,6 +156,10 @@ object DirectDStreamProgressTracker {
     _progressTracker = progressTracker
   }
 
+  def isMetadataExist(fs: FileSystem, commitTime: Long): Boolean = {
+    fs.exists(new Path(s"${_progressTracker.metadataDirectoryStr}/${PathTools.makeMetadataFileName(commitTime)}"))
+  }
+
   private[spark] def initInstance(
       progressDirStr: String,
       appName: String,

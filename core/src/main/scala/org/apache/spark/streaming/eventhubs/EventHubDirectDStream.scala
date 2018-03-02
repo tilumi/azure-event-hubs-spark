@@ -67,6 +67,9 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
 
   private var initialized = false
 
+  val cleanupLock = new Object
+  var lastCleanupTime = -1L
+
   override def getProgressDir: String = this.progressDir
 
   DirectDStreamProgressTracker.registeredConnectors += this
@@ -305,11 +308,11 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
   override private[streaming] def clearCheckpointData(time: Time): Unit = {
     super.clearCheckpointData(time)
     logInfo(s"$eventHubNameSpace: clear checkpoint data")
-    EventHubDirectDStream.cleanupLock.synchronized {
-      if (EventHubDirectDStream.lastCleanupTime < time.milliseconds) {
+    cleanupLock.synchronized {
+      if (lastCleanupTime < time.milliseconds) {
         logInfo(s"$eventHubNameSpace: clean up progress file which is earlier than ${time.milliseconds}")
         progressTracker(eventHubNameSpace).cleanProgressFile(time.milliseconds)
-        EventHubDirectDStream.lastCleanupTime = time.milliseconds
+        lastCleanupTime = time.milliseconds
       }
     }
   }
@@ -457,6 +460,4 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
 }
 
 private[eventhubs] object EventHubDirectDStream {
-  val cleanupLock = new Object
-  var lastCleanupTime = -1L
 }

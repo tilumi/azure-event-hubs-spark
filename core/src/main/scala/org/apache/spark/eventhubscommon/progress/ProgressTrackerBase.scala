@@ -18,11 +18,8 @@
 package org.apache.spark.eventhubscommon.progress
 
 import java.io.{BufferedReader, IOException, InputStreamReader}
-import java.time.Instant
 import java.util.concurrent._
 
-import scala.collection.mutable
-import scala.collection.mutable.ListBuffer
 import com.microsoft.azure.eventhubs.PartitionReceiver
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs._
@@ -30,7 +27,9 @@ import org.apache.spark.eventhubscommon.{EventHubNameAndPartition, EventHubsConn
 import org.apache.spark.internal.Logging
 import org.apache.spark.streaming.eventhubs.checkpoint.DirectDStreamProgressTracker
 
-import scala.util.{Failure, Success, Try}
+import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
+import scala.util.{Failure, Try}
 
 private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
     namespace: String,

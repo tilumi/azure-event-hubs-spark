@@ -49,7 +49,7 @@ private[spark] class DirectDStreamProgressTracker private[spark] (
   private val driverLock = new Object
 
   override def eventHubNameAndPartitions: Map[String, List[EventHubNameAndPartition]] = {
-    DirectDStreamProgressTracker.registeredConnectors.map { connector =>
+    DirectDStreamProgressTracker.registeredConnectors.filter(_.uid.contentEquals(namespace)).map { connector =>
       (connector.uid, connector.connectedInstances)
     }.toMap
   }

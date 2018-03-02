@@ -102,7 +102,7 @@ private[spark] class EventHubsSource(
   StructuredStreamingProgressTracker.registeredConnectors += uid -> this
 
   // initialize ProgressTracker
-  private val progressTracker = StructuredStreamingProgressTracker.initInstance(
+  private val progressTracker = StructuredStreamingProgressTracker.initInstance(eventHubsNamespace,
     uid,
     eventHubsParams("eventhubs.progressTrackingDir"),
     sqlContext.sparkContext.appName,

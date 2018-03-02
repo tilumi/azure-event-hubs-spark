@@ -38,10 +38,11 @@ import org.apache.spark.streaming.eventhubs.EventHubDirectDStream
  * @param hadoopConfiguration the hadoop configuration instance
  */
 private[spark] class DirectDStreamProgressTracker private[spark] (
+    namespace: String,
     progressDir: String,
     appName: String,
     hadoopConfiguration: Configuration)
-    extends ProgressTrackerBase(progressDir, appName, hadoopConfiguration) {
+    extends ProgressTrackerBase(namespace, progressDir, appName, hadoopConfiguration) {
 
   // the lock synchronizing the read and committing operations, since they are executed in driver
   // and listener thread respectively.
@@ -78,7 +79,8 @@ private[spark] class DirectDStreamProgressTracker private[spark] (
   private def initTempProgressFileDirectory(): Unit = {
     try {
       val fs = tempDirectoryPath.getFileSystem(hadoopConfiguration)
-      DirectDStreamProgressTracker.registeredConnectors.foreach((connector) => {
+      DirectDStreamProgressTracker.registeredConnectors.filter(_.uid.contentEquals(namespace)).
+        foreach((connector) => {
         val tmpPath = new Path(PathTools.makeTempDirectoryStr(connector.getProgressDir, appName))
         val checkpointTempDirExisted = fs.exists(tmpPath)
         if (checkpointTempDirExisted) {
@@ -141,37 +143,35 @@ object DirectDStreamProgressTracker {
 
   val registeredConnectors = new ListBuffer[EventHubsConnector]
 
-  private var _progressTracker: DirectDStreamProgressTracker = _
+  private var _progressTrackers: Map[String , DirectDStreamProgressTracker] = Map.empty[String, DirectDStreamProgressTracker]
 
   private[spark] def reset(): Unit = {
     registeredConnectors.clear()
-    _progressTracker.metadataCleanupFuture.cancel(true)
-    _progressTracker = null
+    _progressTrackers.foreach(_._2.metadataCleanupFuture.cancel(true))
+    _progressTrackers = null
   }
 
-  def getInstance: ProgressTrackerBase[_ <: EventHubsConnector] = _progressTracker
+  def getInstance: Map[String, ProgressTrackerBase[_ <: EventHubsConnector]] = _progressTrackers
 
-  // should only be used for testing
-  private[streaming] def setProgressTracker(progressTracker: DirectDStreamProgressTracker): Unit = {
-    _progressTracker = progressTracker
-  }
 
   def isMetadataExist(fs: FileSystem, commitTime: Long): Boolean = {
-    fs.exists(new Path(s"${_progressTracker.metadataDirectoryStr}/${PathTools.makeMetadataFileName(commitTime)}"))
+    _progressTrackers.map(tracker =>
+      fs.exists(new Path(s"${tracker._2.metadataDirectoryStr}/${PathTools.makeMetadataFileName(commitTime)}"))
+    ).reduce(_ & _)
   }
 
   private[spark] def initInstance(
+      namespace: String,
       progressDirStr: String,
       appName: String,
-      hadoopConfiguration: Configuration): ProgressTrackerBase[_ <: EventHubsConnector] = {
+      hadoopConfiguration: Configuration): Map[String, ProgressTrackerBase[_ <: EventHubsConnector]] = {
     this.synchronized {
       // DirectDStream shall have singleton progress tracker
-      if (_progressTracker == null) {
-        _progressTracker =
-          new DirectDStreamProgressTracker(progressDirStr, appName, hadoopConfiguration)
-      }
-      _progressTracker.init()
+      val progressTracker = new DirectDStreamProgressTracker(namespace, progressDirStr, appName, hadoopConfiguration)
+      progressTracker.init()
+      _progressTrackers = _progressTrackers + (namespace -> progressTracker)
+
     }
-    _progressTracker
+    _progressTrackers
   }
 }

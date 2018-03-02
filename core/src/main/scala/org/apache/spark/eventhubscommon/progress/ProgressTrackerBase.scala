@@ -33,6 +33,7 @@ import org.apache.spark.streaming.eventhubs.checkpoint.DirectDStreamProgressTrac
 import scala.util.{Failure, Success, Try}
 
 private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
+    namespace: String,
     progressDir: String,
     appName: String,
     hadoopConfiguration: Configuration)
@@ -472,7 +473,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
 
   protected def cleanupTempFile(timestampToClean: Long) = {
     val fs = progressDirectoryPath.getFileSystem(hadoopConfiguration)
-    val allEventDStreams = DirectDStreamProgressTracker.registeredConnectors
+    val allEventDStreams = DirectDStreamProgressTracker.registeredConnectors.filter(_.uid.contentEquals(namespace))
     allEventDStreams.foreach((connector) => {
       val allUselessTempFiles = fs
         .listStatus(new Path(PathTools.makeTempDirectoryStr(connector.getProgressDir, appName)), new PathFilter {

@@ -25,11 +25,12 @@ import org.apache.spark.eventhubscommon.{ EventHubNameAndPartition, EventHubsCon
 import org.apache.spark.eventhubscommon.progress.{ PathTools, ProgressTrackerBase }
 
 private[spark] class StructuredStreamingProgressTracker private[spark] (
+    namespace: String,
     uid: String,
     progressDir: String,
     appName: String,
     hadoopConfiguration: Configuration)
-    extends ProgressTrackerBase(progressDir, appName, hadoopConfiguration) {
+    extends ProgressTrackerBase(namespace, progressDir, appName, hadoopConfiguration) {
 
   private[spark] override lazy val progressDirectoryStr =
     PathTools.makeProgressDirectoryStr(progressDir, appName, uid)
@@ -105,6 +106,7 @@ object StructuredStreamingProgressTracker {
     _progressTrackers(uid)
 
   private[spark] def initInstance(
+      namespace: String,
       uid: String,
       progressDirStr: String,
       appName: String,
@@ -112,7 +114,8 @@ object StructuredStreamingProgressTracker {
     this.synchronized {
       // DirectDStream shall have singleton progress tracker
       if (_progressTrackers.get(uid).isEmpty) {
-        _progressTrackers += uid -> new StructuredStreamingProgressTracker(uid,
+        _progressTrackers += uid -> new StructuredStreamingProgressTracker(namespace,
+                                                                           uid,
                                                                            progressDirStr,
                                                                            appName,
                                                                            hadoopConfiguration)

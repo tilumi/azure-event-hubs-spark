@@ -101,7 +101,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
   @transient private var _eventHubClient: Client = _
 
   private def progressTracker =
-    DirectDStreamProgressTracker.getInstance.asInstanceOf[DirectDStreamProgressTracker]
+    DirectDStreamProgressTracker.getInstance.asInstanceOf[Map[String, DirectDStreamProgressTracker]]
 
   private[eventhubs] def setEventHubClient(eventHubClient: Client): EventHubDirectDStream = {
     _eventHubClient = eventHubClient
@@ -127,7 +127,8 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
     require(
       concurrentJobs == 1,
       "due to the limitation from eventhub, we do not allow to have multiple concurrent spark jobs")
-    DirectDStreamProgressTracker.initInstance(progressDir,
+    DirectDStreamProgressTracker.initInstance(eventHubNameSpace,
+                                              progressDir,
                                               context.sparkContext.appName,
                                               context.sparkContext.hadoopConfiguration)
     ProgressTrackingListener.initInstance(ssc, progressDir)
@@ -149,7 +150,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
    * @return EventHubName-Partition -> (offset, seq)
    */
   private def fetchStartOffsetForEachPartition(validTime: Time, fallBack: Boolean): OffsetRecord = {
-    val offsetRecord = progressTracker.read(
+    val offsetRecord = progressTracker(eventHubNameSpace).read(
       eventHubNameSpace,
       validTime.milliseconds - ssc.graph.batchDuration.milliseconds,
       fallBack)
@@ -307,7 +308,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
     EventHubDirectDStream.cleanupLock.synchronized {
       if (EventHubDirectDStream.lastCleanupTime < time.milliseconds) {
         logInfo(s"clean up progress file which is earlier than ${time.milliseconds}")
-        progressTracker.cleanProgressFile(time.milliseconds)
+        progressTracker(eventHubNameSpace).cleanProgressFile(time.milliseconds)
         EventHubDirectDStream.lastCleanupTime = time.milliseconds
       }
     }
@@ -418,7 +419,9 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
       // checkpoint
       logInfo("initialized ProgressTracker")
       val appName = context.sparkContext.appName
-      DirectDStreamProgressTracker.initInstance(progressDir,
+      DirectDStreamProgressTracker.initInstance(
+                                                eventHubNameSpace,
+                                                progressDir,
                                                 appName,
                                                 context.sparkContext.hadoopConfiguration)
       batchForTime.toSeq.sortBy(_._1)(Time.ordering).foreach {

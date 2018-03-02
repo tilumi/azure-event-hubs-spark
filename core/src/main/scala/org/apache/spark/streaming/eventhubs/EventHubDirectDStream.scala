@@ -67,7 +67,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
 
   private var initialized = false
 
-  val cleanupLock = new Object
+  val cleanupLock = new Object with Serializable
   var lastCleanupTime = -1L
 
   override def getProgressDir: String = this.progressDir

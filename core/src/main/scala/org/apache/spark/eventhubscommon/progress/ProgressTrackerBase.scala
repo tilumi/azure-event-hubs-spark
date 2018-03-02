@@ -463,6 +463,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
           fromPathToTimestamp(p2))
     if (sortedFileList.nonEmpty) {
       sortedFileList.tail.foreach { filePath =>
+        logInfo(s"cleanProgressFile: $filePath")
         fs.delete(filePath, true)
       }
     }

@@ -78,7 +78,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   }
 
   // no metadata (for backward compatibility)
-  private def getLatestFileWithoutMetadata(fs: FileSystem,
+  private def getFirstFileWithoutMetadata(fs: FileSystem,
                                            timestamp: Long = Long.MaxValue): Option[Path] = {
     if (fs.exists(progressDirectoryPath)) {
       val allFiles = fs.listStatus(progressDirectoryPath)
@@ -88,8 +88,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
         Some(
           allFiles
             .filter(fsStatus => fromPathToTimestamp(fsStatus.getPath) <= timestamp)
-            .sortWith((f1, f2) => fromPathToTimestamp(f1.getPath) > fromPathToTimestamp(f2.getPath))(
-              0)
+            .sortWith((f1, f2) => fromPathToTimestamp(f1.getPath) < fromPathToTimestamp(f2.getPath)).head
             .getPath)
       }
     } else {
@@ -113,22 +112,22 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
    *
    * NOTE: the additional integer in return value is to simplify the test (could be improved)
    */
-  private[spark] def getLatestFile(fs: FileSystem,
-                                   timestamp: Long = Long.MaxValue): (Int, Option[Path]) = {
+  private[spark] def getFirstFile(fs: FileSystem,
+                                  timestamp: Long = Long.MaxValue): (Int, Option[Path]) = {
     // first check metadata directory if exists
-    if (fs.exists(metadataDirectoryPath)) {
-      val metadataFiles = fs
-        .listStatus(metadataDirectoryPath)
-        .filter(file => file.isFile && file.getPath.getName.toLong <= timestamp)
-      if (metadataFiles.nonEmpty) {
-        // metadata files exists
-        (0, getLatestFileWithMetadata(metadataFiles))
-      } else {
-        (1, getLatestFileWithoutMetadata(fs, timestamp))
-      }
-    } else {
-      (1, getLatestFileWithoutMetadata(fs, timestamp))
-    }
+//    if (fs.exists(metadataDirectoryPath)) {
+//      val metadataFiles = fs
+//        .listStatus(metadataDirectoryPath)
+//        .filter(file => file.isFile && file.getPath.getName.toLong <= timestamp)
+//      if (metadataFiles.nonEmpty) {
+//        // metadata files exists
+//        (0, getLatestFileWithMetadata(metadataFiles))
+//      } else {
+//        (1, getFirstFileWithoutMetadata(fs, timestamp))
+//      }
+//    } else {
+    (1, getFirstFileWithoutMetadata(fs, timestamp))
+//    }
   }
 
   /**
@@ -140,7 +139,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
    *         the latest timestamp)
    */
   protected def validateProgressFile(fs: FileSystem): (Boolean, Option[Path]) = {
-    val (_, latestFileOpt) = getLatestFile(fs)
+    val (_, latestFileOpt) = getFirstFile(fs)
     val allProgressFiles = new mutable.HashMap[String, List[EventHubNameAndPartition]]
     var br: BufferedReader = null
     try {
@@ -253,7 +252,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
         if (!fallBack) {
           pinPointProgressFile(fs, timestamp)
         } else {
-          getLatestFile(fs, timestamp)._2
+          getFirstFile(fs, timestamp)._2
         }
       }
       if (progressFileOption.isEmpty) {
@@ -451,22 +450,12 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   }
 
   def cleanProgressFile(timestampToClean: Long): Unit = {
+    logInfo(s"Clean progress file: $timestampToClean")
     val fs = progressDirectoryPath.getFileSystem(hadoopConfiguration)
-    val allUselessFiles = fs
-      .listStatus(progressDirectoryPath, new PathFilter {
-        override def accept(path: Path): Boolean = fromPathToTimestamp(path) <= timestampToClean
+    fs.listStatus(progressDirectoryPath, new PathFilter {
+        override def accept(path: Path): Boolean = fromPathToTimestamp(path) < timestampToClean
       })
-      .map(_.getPath)
-    val sortedFileList = allUselessFiles.sortWith(
-      (p1, p2) =>
-        fromPathToTimestamp(p1) >
-          fromPathToTimestamp(p2))
-    if (sortedFileList.nonEmpty) {
-      sortedFileList.tail.foreach { filePath =>
-        logInfo(s"cleanProgressFile: $filePath")
-        fs.delete(filePath, true)
-      }
-    }
+      .foreach((file) => fs.delete(file.getPath, true))
     // clean temp directory
     cleanupTempFile(timestampToClean)
   }

@@ -356,7 +356,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
     require(progressTracker != null, "ProgressTracker hasn't been initialized")
     var startPointRecord = fetchStartOffsetForEachPartition(validTime, !initialized)
     logInfo("Before compute 2")
-    while (startPointRecord.timestamp < validTime.milliseconds -
+    while (initialized && startPointRecord.timestamp < validTime.milliseconds -
              ssc.graph.batchDuration.milliseconds) {
       logInfo(
         s"wait for ProgressTrackingListener to commit offsets at Batch" +

@@ -18,7 +18,6 @@
 package org.apache.spark.eventhubscommon.rdd
 
 import java.time.Instant
-import java.util.Collections
 
 import com.microsoft.azure.eventhubs.EventData
 import org.apache.hadoop.conf.Configuration
@@ -28,7 +27,6 @@ import org.apache.spark.eventhubscommon.client.EventHubsClientWrapper
 import org.apache.spark.eventhubscommon.client.EventHubsOffsetTypes.EventHubsOffsetType
 import org.apache.spark.eventhubscommon.progress.ProgressWriter
 import org.apache.spark.rdd.RDD
-import org.apache.spark.util.LongAccumulator
 import org.apache.spark.{Partition, SparkContext, TaskContext}
 
 import scala.collection.mutable.ListBuffer

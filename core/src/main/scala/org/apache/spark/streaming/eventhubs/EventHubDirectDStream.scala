@@ -31,7 +31,7 @@ import org.apache.spark.streaming.eventhubs.checkpoint._
 import org.apache.spark.streaming.scheduler.rate.RateEstimator
 import org.apache.spark.streaming.scheduler.{RateController, StreamInputInfo}
 import org.apache.spark.streaming.{StreamingContext, Time}
-import org.apache.spark.util.{LongAccumulator, Utils}
+import org.apache.spark.util.Utils
 
 import scala.collection.mutable
 
@@ -48,7 +48,6 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
                                                                     private[eventhubs] val eventHubNameSpace: String,
                                                                     progressDir: String,
                                                                     eventhubsParams: Map[String, Map[String, String]],
-                                                                    accumulators: Seq[LongAccumulator],
                                                                     eventhubReceiverCreator: (Map[String, String],
                               Int,
                               Long,

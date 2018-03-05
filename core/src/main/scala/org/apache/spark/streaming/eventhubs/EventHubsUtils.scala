@@ -21,7 +21,6 @@ import org.apache.spark.SparkConf
 import org.apache.spark.eventhubscommon.client.EventHubsOffsetTypes.EventHubsOffsetType
 import org.apache.spark.eventhubscommon.client.{Client, EventHubsClientWrapper}
 import org.apache.spark.streaming.StreamingContext
-import org.apache.spark.util.LongAccumulator
 
 object EventHubsUtils {
 
@@ -48,10 +47,8 @@ object EventHubsUtils {
                            ssc: StreamingContext,
                            eventHubNamespace: String,
                            progressDir: String,
-                           eventParams: Predef.Map[String, Predef.Map[String, String]],
-                           accumulators: Seq[LongAccumulator]): EventHubDirectDStream = {
-    val newStream = new EventHubDirectDStream(ssc, eventHubNamespace, progressDir, eventParams,
-      accumulators)
+                           eventParams: Predef.Map[String, Predef.Map[String, String]]): EventHubDirectDStream = {
+    val newStream = new EventHubDirectDStream(ssc, eventHubNamespace, progressDir, eventParams)
     newStream
   }
 
@@ -63,7 +60,6 @@ object EventHubsUtils {
       ssc: StreamingContext,
       eventHubNamespace: String,
       progressDir: String,
-      accumulators: Seq[LongAccumulator],
       eventParams: Predef.Map[String, Predef.Map[String, String]],
       eventHubsReceiverCreator: (Predef.Map[String, String],
                                  Int,
@@ -77,7 +73,6 @@ object EventHubsUtils {
                                               eventHubNamespace,
                                               progressDir,
                                               eventParams,
-                                              accumulators,
                                               eventHubsReceiverCreator,
                                               eventHubsClientCreator)
     newStream

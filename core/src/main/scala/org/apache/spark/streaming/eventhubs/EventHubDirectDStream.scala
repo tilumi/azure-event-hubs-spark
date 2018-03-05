@@ -156,7 +156,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
     val offsetRecord = progressTracker(eventHubNameSpace).read(
       eventHubNameSpace,
       validTime.milliseconds - ssc.graph.batchDuration.milliseconds,
-      fallBack)
+      shouldCareEnqueueTimeOrOffset)
     require(offsetRecord.offsets.nonEmpty, "progress file cannot be empty")
     if (offsetRecord.timestamp != -1) {
       OffsetRecord(math.max(ssc.graph.startTime.milliseconds, offsetRecord.timestamp),
@@ -348,11 +348,11 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
   }
 
   override def compute(validTime: Time): Option[RDD[EventData]] = {
-    logInfo("Start compute")
+//    logInfo("Start compute")
     if (!initialized) {
       ProgressTrackingListener.initInstance(ssc, progressDir)
     }
-    logInfo("Before compute 1")
+//    logInfo("Before compute 1")
     require(progressTracker != null, "ProgressTracker hasn't been initialized")
     var startPointRecord = fetchStartOffsetForEachPartition(validTime, false)
     logInfo("Before compute 2")

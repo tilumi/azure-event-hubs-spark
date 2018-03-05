@@ -242,20 +242,17 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
   /**
    * read the progress record for the specified progressEntityID and timestamp
    */
-  def read(targetConnectorUID: String, timestamp: Long, fallBack: Boolean): OffsetRecord = {
+  def read(targetConnectorUID: String, timestamp: Long, isNotInitializedAndNotFromCheckpoint: Boolean): OffsetRecord = {
     val fs = progressDirectoryPath.getFileSystem(hadoopConfiguration)
     var recordToReturn = Map[EventHubNameAndPartition, (Long, Long)]()
     var readTimestamp: Long = 0
     var progressFileOption: Option[Path] = null
     try {
-      progressFileOption = {
-        if (!fallBack) {
-          pinPointProgressFile(fs, timestamp)
-        } else {
-          getFirstFile(fs, timestamp)._2
-        }
-      }
+      progressFileOption = pinPointProgressFile(fs, timestamp)
       if (progressFileOption.isEmpty) {
+        if (!isNotInitializedAndNotFromCheckpoint) {
+          throw new RuntimeException(s"Cannot find checkpoint file for $timestamp")
+        }
         // if no progress file, then start from the beginning of the streams
         val connectedEventHubs = eventHubNameAndPartitions.find {
           case (connectorUID, _) => connectorUID == targetConnectorUID
@@ -286,6 +283,10 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
         logError(ias.getMessage)
         ias.printStackTrace()
         throw ias
+      case rs: RuntimeException =>
+        logError(rs.getMessage)
+        rs.printStackTrace()
+        throw rs
     }
     OffsetRecord(readTimestamp, recordToReturn)
   }

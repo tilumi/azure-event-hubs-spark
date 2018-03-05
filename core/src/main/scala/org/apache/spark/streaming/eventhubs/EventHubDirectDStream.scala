@@ -354,7 +354,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
     }
     logInfo("Before compute 1")
     require(progressTracker != null, "ProgressTracker hasn't been initialized")
-    var startPointRecord = fetchStartOffsetForEachPartition(validTime, !initialized)
+    var startPointRecord = fetchStartOffsetForEachPartition(validTime, false)
     logInfo("Before compute 2")
     while (initialized && startPointRecord.timestamp < validTime.milliseconds -
              ssc.graph.batchDuration.milliseconds) {
@@ -363,7 +363,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
           s" ${validTime.milliseconds}")
       graph.wait()
       logInfo(s"wake up at Batch ${validTime.milliseconds} at DStream $id")
-      startPointRecord = fetchStartOffsetForEachPartition(validTime, !initialized)
+      startPointRecord = fetchStartOffsetForEachPartition(validTime, false)
     }
     logInfo("Before compute 3")
     // we need to update highest offset after we skip or get out from the while loop, because

@@ -152,11 +152,10 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
    *
    * @return EventHubName-Partition -> (offset, seq)
    */
-  private def fetchStartOffsetForEachPartition(validTime: Time, fallBack: Boolean): OffsetRecord = {
+  private def fetchStartOffsetForEachPartition(validTime: Time): OffsetRecord = {
     val offsetRecord = progressTracker(eventHubNameSpace).read(
       eventHubNameSpace,
-      validTime.milliseconds - ssc.graph.batchDuration.milliseconds,
-      shouldCareEnqueueTimeOrOffset)
+      validTime.milliseconds - ssc.graph.batchDuration.milliseconds)
     require(offsetRecord.offsets.nonEmpty, "progress file cannot be empty")
     if (offsetRecord.timestamp != -1) {
       OffsetRecord(math.max(ssc.graph.startTime.milliseconds, offsetRecord.timestamp),
@@ -348,13 +347,11 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
   }
 
   override def compute(validTime: Time): Option[RDD[EventData]] = {
-//    logInfo("Start compute")
     if (!initialized) {
       ProgressTrackingListener.initInstance(ssc, progressDir)
     }
-//    logInfo("Before compute 1")
     require(progressTracker != null, "ProgressTracker hasn't been initialized")
-    var startPointRecord = fetchStartOffsetForEachPartition(validTime, false)
+    var startPointRecord = fetchStartOffsetForEachPartition(validTime)
     logInfo("Before compute 2")
     while (initialized && startPointRecord.timestamp < validTime.milliseconds -
              ssc.graph.batchDuration.milliseconds) {
@@ -363,7 +360,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
           s" ${validTime.milliseconds}")
       graph.wait()
       logInfo(s"wake up at Batch ${validTime.milliseconds} at DStream $id")
-      startPointRecord = fetchStartOffsetForEachPartition(validTime, false)
+      startPointRecord = fetchStartOffsetForEachPartition(validTime)
     }
     logInfo("Before compute 3")
     // we need to update highest offset after we skip or get out from the while loop, because

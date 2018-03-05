@@ -305,8 +305,7 @@ private[spark] class EventHubsSource(
                         uid = uid,
                         subDirs = sqlContext.sparkContext.appName,
                         uid),
-      eventHubsReceiver,
-      null
+      eventHubsReceiver
     )
   }
 

@@ -54,8 +54,7 @@ private[spark] class EventHubsRDD(sc: SparkContext,
                                                             Int,
                                                             Long,
                                                             EventHubsOffsetType,
-                                                            Int) => EventHubsClientWrapper,
-                                  accumulators: Seq[LongAccumulator])
+                                                            Int) => EventHubsClientWrapper)
     extends RDD[EventData](sc, Nil) {
 
   override def getPartitions: Array[Partition] = {
@@ -200,18 +199,6 @@ private[spark] class EventHubsRDD(sc: SparkContext,
           val throughput = receivedSize / (totalReceivingTime / 1000D)
           logInfo(s"Received $receivedSize records in ${totalReceivingTime / 1000D} seconds, " +
             s"throughput: $throughput")
-          if (accumulators.nonEmpty) {
-            val inputElapsedTimeAccumulator = accumulators.head
-            inputElapsedTimeAccumulator.add(totalReceivingTime)
-          }
-          if (accumulators.size > 1) {
-            val receivingStartTimeAccumulator = accumulators(1)
-            receivingStartTimeAccumulator.add(receivingStartTime)
-          }
-          if (accumulators.size > 2) {
-            val receivingEndTimeAccumulator = accumulators(2)
-            receivingEndTimeAccumulator.add(receivingEndTime)
-          }
         } finally {
           eventHubReceiver.close()
         }

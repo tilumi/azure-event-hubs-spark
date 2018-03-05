@@ -296,8 +296,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
                         streamId,
                         uid = eventHubNameSpace,
                         subDirs = ssc.sparkContext.appName),
-      eventhubReceiverCreator,
-      accumulators
+      eventhubReceiverCreator
     )
     reportInputInto(validTime,
                     offsetRanges,
@@ -439,8 +438,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
             }.toList,
             t.milliseconds,
             OffsetStoreParams(progressDir, streamId, uid = eventHubNameSpace, subDirs = appName),
-            eventhubReceiverCreator,
-            accumulators
+            eventhubReceiverCreator
           )
       }
     }

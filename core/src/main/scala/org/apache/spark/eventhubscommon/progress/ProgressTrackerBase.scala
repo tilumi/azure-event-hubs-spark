@@ -397,7 +397,7 @@ private[spark] abstract class ProgressTrackerBase[T <: EventHubsConnector](
                                        ehConnector.uid,
                                        ehNameAndPartition,
                                        timestamp)
-            logInfo(s"Collecting progress record: $path")
+//            logInfo(s"Collecting progress record: $path")
             path
           }
         )

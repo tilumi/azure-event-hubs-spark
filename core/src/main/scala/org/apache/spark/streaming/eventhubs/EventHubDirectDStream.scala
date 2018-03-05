@@ -410,7 +410,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
       batchForTime.clear()
       generatedRDDs.foreach { kv =>
         val offsetRangeOfRDD = kv._2.asInstanceOf[EventHubsRDD].offsetRanges.map(_.toTuple).toArray
-        logInfo(s"update RDD ${offsetRangeOfRDD.mkString("[", ", ", "]")} at ${kv._1}")
+//        logInfo(s"update RDD ${offsetRangeOfRDD.mkString("[", ", ", "]")} at ${kv._1}")
         batchForTime += kv._1 -> offsetRangeOfRDD
       }
     }

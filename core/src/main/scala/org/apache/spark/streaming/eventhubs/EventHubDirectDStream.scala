@@ -358,7 +358,7 @@ private[eventhubs] class EventHubDirectDStream private[eventhubs] (
       logInfo(
         s"wait for ProgressTrackingListener to commit offsets at Batch" +
           s" ${validTime.milliseconds}")
-      graph.wait()
+      Thread.sleep(500)
       logInfo(s"wake up at Batch ${validTime.milliseconds} at DStream $id")
       startPointRecord = fetchStartOffsetForEachPartition(validTime)
     }

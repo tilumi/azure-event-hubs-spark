@@ -60,6 +60,10 @@ private[client] class AMQPEventHubsClient(ehNames: List[String],
                 results += ehNameAndPartition -> eventHubPartitionRuntimeInformation
                 Seq[Throwable]()
               case Failure(e) =>
+                nameToClient.get(ehName) match {
+                  case Some(client) => client.onClose().get()
+                  case _ =>
+                }
                 val eventHubClient = new EventHubsClientWrapper(ehParams(ehName))
                   .createClient(ehParams(ehName))
                 nameToClient.put(ehName, eventHubClient)

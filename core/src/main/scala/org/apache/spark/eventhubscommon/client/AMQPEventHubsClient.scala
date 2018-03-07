@@ -61,10 +61,14 @@ private[client] class AMQPEventHubsClient(ehNames: List[String],
                 Seq[Throwable]()
               case Failure(e) =>
                 nameToClient.get(ehName) match {
-                  case Some(client) => Try(client.onClose().get()) match {
-                    case Success(_) =>
-                    case Failure(exception) => logWarning("Close client failed", exception)
-                  }
+                  case Some(client) =>
+                    val closeRetry = 3
+                    var closeTried = 0
+                    while (closeTried < closeRetry && Try(client.onClose().get()).isFailure) {
+                      logWarning("Close client failed")
+                      closeTried += 1
+                    }
+                    logInfo("Close client succeed")
                   case _ =>
                 }
                 val eventHubClient = new EventHubsClientWrapper(ehParams(ehName))

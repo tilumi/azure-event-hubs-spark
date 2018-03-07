@@ -61,7 +61,10 @@ private[client] class AMQPEventHubsClient(ehNames: List[String],
                 Seq[Throwable]()
               case Failure(e) =>
                 nameToClient.get(ehName) match {
-                  case Some(client) => client.onClose().get()
+                  case Some(client) => Try(client.onClose().get()) match {
+                    case Success(_) =>
+                    case Failure(exception) => logWarning("Close client failed", exception)
+                  }
                   case _ =>
                 }
                 val eventHubClient = new EventHubsClientWrapper(ehParams(ehName))

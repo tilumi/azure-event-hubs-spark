@@ -26,6 +26,7 @@ import org.apache.spark.internal.Logging
 import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
 
 private[client] class AMQPEventHubsClient(ehNames: List[String],
                                           ehParams: Map[String, Map[String, String]])

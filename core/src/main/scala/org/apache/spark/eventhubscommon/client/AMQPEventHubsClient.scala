@@ -20,9 +20,12 @@ package org.apache.spark.eventhubscommon.client
 import scala.collection.mutable
 import com.microsoft.azure.eventhubs.{EventHubClient, EventHubPartitionRuntimeInformation}
 import org.apache.spark.eventhubscommon.EventHubNameAndPartition
+import org.apache.spark.eventhubscommon.utils.Retry
 import org.apache.spark.internal.Logging
 
+import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
+import scala.concurrent.duration._
 
 private[client] class AMQPEventHubsClient(ehNames: List[String],
                                           ehParams: Map[String, Map[String, String]])
@@ -62,13 +65,17 @@ private[client] class AMQPEventHubsClient(ehNames: List[String],
               case Failure(e) =>
                 nameToClient.get(ehName) match {
                   case Some(client) =>
-                    val closeRetry = 3
-                    var closeTried = 0
-                    while (closeTried < closeRetry && Try(client.onClose().get()).isFailure) {
-                      logWarning("Close client failed")
-                      closeTried += 1
+                    val output = Retry.retry(3) {
+                      client.closeSync()
                     }
-                    logInfo("Close client succeed")
+                    output.onComplete({
+                      case Success(_) => logInfo("Close client succeed")
+                      case Failure(exception) => logWarning("Close client failed", exception)
+                    })
+                    Try(Await.result(output, 30 seconds)) match {
+                      case Success(_) =>
+                      case Failure(exception) => logWarning("Try close client 3 times but timeout", exception)
+                    }
                   case _ =>
                 }
                 val eventHubClient = new EventHubsClientWrapper(ehParams(ehName))

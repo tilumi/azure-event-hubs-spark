@@ -118,8 +118,10 @@ private[spark] class EventHubsRDD(sc: SparkContext,
 
     def errWrongSeqNo(part: EventHubsRDDPartition, receivedSeqNo: SequenceNumber): String =
       s"requestSeqNo $requestSeqNo does not match the received sequence number $receivedSeqNo"
-
+    var retrieveTimeElapsed = 0L
+    var retrieveRecords = 0
     override def next(): EventData = {
+      val start = System.currentTimeMillis()
       assert(hasNext(), "Can't call next() once untilSeqNo has been reached.")
 
       @volatile var event: EventData = null
@@ -132,6 +134,8 @@ private[spark] class EventHubsRDD(sc: SparkContext,
       assert(requestSeqNo == event.getSystemProperties.getSequenceNumber,
              errWrongSeqNo(part, event.getSystemProperties.getSequenceNumber))
       requestSeqNo += 1
+      retrieveTimeElapsed += (System.currentTimeMillis() - start)
+      retrieveRecords += 1
       event
     }
 
@@ -140,6 +144,8 @@ private[spark] class EventHubsRDD(sc: SparkContext,
     }
 
     def closeIfNeeded(): Unit = {
+      logInfo(s"Retrieve $retrieveRecords records")
+      logInfo(s"Retrieve time elapsed: $retrieveTimeElapsed ms")
       if (client != null) client.close()
     }
   }

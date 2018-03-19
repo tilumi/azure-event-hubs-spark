@@ -120,6 +120,7 @@ private[spark] class EventHubsRDD(sc: SparkContext,
       s"requestSeqNo $requestSeqNo does not match the received sequence number $receivedSeqNo"
     var retrieveTimeElapsed = 0L
     var retrieveRecords = 0
+    var encounterEmptyCount = 0
     override def next(): EventData = {
       val start = System.currentTimeMillis()
       assert(hasNext(), "Can't call next() once untilSeqNo has been reached.")
@@ -127,6 +128,7 @@ private[spark] class EventHubsRDD(sc: SparkContext,
       @volatile var event: EventData = null
       @volatile var i: java.lang.Iterable[EventData] = null
       while (i == null) {
+        encounterEmptyCount += 1
         i = client.receive(1)
       }
       event = i.iterator.next
@@ -147,6 +149,7 @@ private[spark] class EventHubsRDD(sc: SparkContext,
       logInfo(s"Retrieve $retrieveRecords records")
       logInfo(s"Retrieve time elapsed: $retrieveTimeElapsed ms")
       logInfo(s"Retrieve rate ${retrieveRecords.toDouble / retrieveTimeElapsed.toDouble}")
+      logInfo(s"encounterEmptyCount: $encounterEmptyCount")
       if (client != null) client.close()
     }
   }

@@ -146,6 +146,7 @@ private[spark] class EventHubsRDD(sc: SparkContext,
     def closeIfNeeded(): Unit = {
       logInfo(s"Retrieve $retrieveRecords records")
       logInfo(s"Retrieve time elapsed: $retrieveTimeElapsed ms")
+      logInfo(s"Retrieve rate ${retrieveRecords.toDouble / retrieveTimeElapsed.toDouble}")
       if (client != null) client.close()
     }
   }

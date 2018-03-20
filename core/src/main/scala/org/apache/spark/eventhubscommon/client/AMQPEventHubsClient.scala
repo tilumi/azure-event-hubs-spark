@@ -66,17 +66,7 @@ private[client] class AMQPEventHubsClient(ehNames: List[String],
               case Failure(e) =>
                 nameToClient.get(ehName) match {
                   case Some(client) =>
-                    val output = Retry.retry(3) {
-                      client.closeSync()
-                    }
-                    output.onComplete({
-                      case Success(_) => logInfo("Close client succeed")
-                      case Failure(exception) => logWarning("Close client failed", exception)
-                    })
-                    Try(Await.result(output, 30 seconds)) match {
-                      case Success(_) =>
-                      case Failure(exception) => logWarning("Try close client 3 times but timeout", exception)
-                    }
+                    client.closeSync()
                   case _ =>
                 }
                 val eventHubClient = new EventHubsClientWrapper(ehParams(ehName))
@@ -97,7 +87,7 @@ private[client] class AMQPEventHubsClient(ehNames: List[String],
       }
       results.toMap.view
     } catch {
-      case e: Exception =>
+      case e: Throwable =>
         e.printStackTrace()
         throw e
     }

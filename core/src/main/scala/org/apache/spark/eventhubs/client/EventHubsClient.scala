@@ -47,7 +47,10 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
   private var _client: EventHubClient = _
   private def client = synchronized {
     if (_client == null) {
-      _client = ClientConnectionPool.borrowClient(ehConf)
+      val connStr = ConnectionStringBuilder(ehConf.connectionString)
+      connStr.setOperationTimeout(ehConf.operationTimeout.getOrElse(DefaultOperationTimeout))
+      _client = com.microsoft.azure.eventhubs.EventHubClient.createSync(connStr.toString, ClientThreadPool.pool)
+
     }
     _client
   }

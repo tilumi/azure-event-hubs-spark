@@ -86,6 +86,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       logWarning(
         s"$requestSeqNo did not match ${event.getSystemProperties.getSequenceNumber}." +
           s"Recreating receiver for $nAndP")
+      receiver.closeSync()
       createReceiver(requestSeqNo)
       while (i == null) { i = receiver.receiveSync(1) }
       event = i.iterator.next

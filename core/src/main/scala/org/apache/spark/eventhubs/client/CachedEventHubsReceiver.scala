@@ -58,6 +58,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     val ehClient = new EventHubsClient(ehConf)
     val requestOffset = ehClient.translateToOffsets(requestSeqNo, nAndP)
     ehClient.close()
+    logInfo(s"Translate sequence number: $requestSeqNo to offset: $requestOffset")
     _receiver = client.createReceiverSync(consumerGroup,
                                           nAndP.partitionId.toString,
                                           EventPosition.fromOffset(requestOffset).convert,
@@ -81,7 +82,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     var i: java.lang.Iterable[EventData] = null
     while (i == null) { i = receiver.receiveSync(1) }
     event = i.iterator.next
-
+    logInfo(s"Received event: (sequence number: ${event.getSystemProperties.getSequenceNumber}, offset ${event.getSystemProperties.getOffset})")
     if (requestSeqNo != event.getSystemProperties.getSequenceNumber) {
       logWarning(
         s"$requestSeqNo did not match ${event.getSystemProperties.getSequenceNumber}." +

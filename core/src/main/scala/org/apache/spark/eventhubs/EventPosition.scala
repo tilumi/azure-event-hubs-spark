@@ -59,8 +59,8 @@ case class EventPosition private (offset: String = null,
 }
 
 object EventPosition {
-  private val StartOfStream: String = "-1"
-  private val EndOfStream: String = "@latest"
+  val StartOfStream: String = "-1"
+  val EndOfStream: String = "@latest"
 
   /**
    * Creates a position at the given offset. When using EventHubs with Spark,

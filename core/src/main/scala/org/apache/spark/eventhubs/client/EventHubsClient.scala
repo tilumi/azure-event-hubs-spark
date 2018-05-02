@@ -29,6 +29,7 @@ import org.json4s.jackson.Serialization
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
+import scala.util.Try
 
 /**
  * Wraps a raw EventHubReceiver to make it easier for unit tests
@@ -253,6 +254,38 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
         { if (seqNo == -1L) 0L else seqNo }
       }
       .map(identity)
+  }
+
+  def translateToOffsets[T](sequenceNumber: SequenceNumber,
+                            nAndP: NameAndPartition,
+                            useStart: Boolean = true): String = {
+    val consumerGroup = ehConf.consumerGroup.getOrElse(DefaultConsumerGroup)
+    val partitionId = nAndP.partitionId
+    var receiver: PartitionReceiver = null
+    try {
+      receiver = client
+        .createReceiverSync(consumerGroup,
+          partitionId.toString,
+          EventPosition.fromSequenceNumber(sequenceNumber).convert)
+      receiver.setPrefetchCount(PrefetchCountMinimum)
+      receiver.setReceiveTimeout(Duration.ofSeconds(5))
+      val events = receiver.receiveSync(1) // get the first event that was received.
+      if (events == null || !events.iterator.hasNext) {
+        logWarning("translate: failed to receive event.")
+        EventPosition.EndOfStream
+      } else {
+        val event = events.iterator.next
+        event.getSystemProperties.getOffset
+      }
+    } catch {
+      case e: IllegalEntityException =>
+        logError("translate: IllegalEntityException. Consumer group may not exist.", e)
+        throw e
+    } finally {
+      if (receiver != null) {
+        receiver.closeSync()
+      }
+    }
   }
 }
 

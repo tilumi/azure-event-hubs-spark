@@ -55,9 +55,12 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     receiverOptions.setReceiverRuntimeMetricEnabled(false)
     receiverOptions.setIdentifier(
       s"spark-${SparkEnv.get.executorId}-${TaskContext.get.taskAttemptId}")
+    val ehClient = new EventHubsClient(ehConf)
+    val requestOffset = ehClient.translateToOffsets(requestSeqNo, nAndP)
+    ehClient.close()
     _receiver = client.createReceiverSync(consumerGroup,
                                           nAndP.partitionId.toString,
-                                          EventPosition.fromSequenceNumber(requestSeqNo).convert,
+                                          EventPosition.fromOffset(requestOffset).convert,
                                           receiverOptions)
     _receiver.setPrefetchCount(DefaultPrefetchCount)
   }

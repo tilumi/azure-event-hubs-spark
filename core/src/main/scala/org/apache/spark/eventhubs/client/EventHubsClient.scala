@@ -267,7 +267,7 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
         .createReceiverSync(consumerGroup,
           partitionId.toString,
           EventPosition.fromSequenceNumber(sequenceNumber).convert)
-      receiver.setPrefetchCount(PrefetchCountMinimum)
+      receiver.setPrefetchCount(1)
       receiver.setReceiveTimeout(Duration.ofSeconds(5))
       val events = receiver.receiveSync(1) // get the first event that was received.
       if (events == null || !events.iterator.hasNext) {

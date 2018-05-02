@@ -275,7 +275,9 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
         EventPosition.EndOfStream
       } else {
         val event = events.iterator.next
-        logInfo(s"translating: event (sequence number: ${event.getSystemProperties.getSequenceNumber}, offset: ${event.getSystemProperties.getOffset})")
+        logInfo(s"translating: event (sequence number: ${event.getSystemProperties.getSequenceNumber}, " +
+          s"offset: ${event.getSystemProperties.getOffset}, " +
+          s"enqueue time: ${event.getSystemProperties.getEnqueuedTime.toString})")
         event.getSystemProperties.getOffset
       }
     } catch {

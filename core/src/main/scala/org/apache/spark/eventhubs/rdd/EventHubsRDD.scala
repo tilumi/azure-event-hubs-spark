@@ -108,7 +108,8 @@ private[spark] class EventHubsRDD(sc: SparkContext,
     } else {
       CachedEventHubsReceiver
     }
-
+    var receivedRecords = 0
+    var receiveElapsedTime = 0L
     logInfo(
       s"Computing EventHubs ${part.name}, partitionId ${part.partitionId} " +
         s"sequence numbers ${part.fromSeqNo} => ${part.untilSeqNo}")
@@ -119,11 +120,18 @@ private[spark] class EventHubsRDD(sc: SparkContext,
 
     override def next(): EventData = {
       assert(hasNext(), "Can't call next() once untilSeqNo has been reached.")
+      val start = System.currentTimeMillis()
       val event = cachedReceiver.receive(ehConf,
                                          part.nameAndPartition,
                                          requestSeqNo,
                                          (part.untilSeqNo - part.fromSeqNo).toInt)
+      receiveElapsedTime += (System.currentTimeMillis() - start)
+      receivedRecords += 1
       requestSeqNo += 1
+      if (!hasNext()) {
+        logInfo(s"Received $receivedRecords records, elapsed $receiveElapsedTime millisecods, " +
+          s"throughput: ${(receivedRecords.toDouble / receiveElapsedTime.toDouble) * 1000} records / second")
+      }
       event
     }
   }

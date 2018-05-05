@@ -175,6 +175,7 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
     } else {
       ehConf.endingPositions.getOrElse(Map.empty).par
     }
+    logInfo(s"ehConf: ${ehConf.toMap}")
     val defaultPos = if (useStart) {
       ehConf.startingPosition.getOrElse(DefaultEventPosition)
     } else {

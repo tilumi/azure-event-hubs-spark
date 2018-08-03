@@ -27,9 +27,10 @@ import org.json4s.jackson.Serialization
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.{ Await, Future }
+import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.compat.java8.FutureConverters._
+import scala.util.{Failure, Success, Try}
 
 /**
  * A [[Client]] which connects to an event hub instance. All interaction
@@ -242,9 +243,12 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
                 }
                 event
               }
-              .map { e =>
-                e.iterator.next.getSystemProperties.getSequenceNumber
-              }
+              .map ( e => {
+                Try(e.iterator.next) match {
+                  case Success(event) => event.getSystemProperties.getSequenceNumber
+                  case Failure(_) => Await.result(latestSeqNoF(nAndP.partitionId), InternalOperationTimeout)
+                }
+              })
             (nAndP.partitionId, seqNo)
         }
     val future = Future

@@ -96,11 +96,43 @@ object EventPosition {
   }
 
   /**
-   * Returns the position for the start of a stream. Provide this position to your
-   * [[EventHubsConf]] to start receiving from the first available event in the partition.
-   *
-   * @return An [[EventPosition]] instance.
-   */
+    * Creates a position at the given offset. When using EventHubs with Spark,
+    * starting positions are always inclusive. Ending positions are always exclusive.
+    * @param offset is the byte offset of the event.
+    * @return An [[EventPosition]] instance.
+    */
+  def fromOffset(offset: String, isInclusive: Boolean): EventPosition = {
+    EventPosition(offset, isInclusive = isInclusive)
+  }
+
+  /**
+    * Creates a position at the given sequence number. When using EventHubs with Spark,
+    * starting positions are always inclusive. Ending positions are always exclusive.
+    *
+    * @param seqNo is the sequence number of the event.
+    * @return An [[EventPosition]] instance.
+    */
+  def fromSequenceNumber(seqNo: SequenceNumber, isInclusive: Boolean): EventPosition = {
+    require(seqNo >= 0L, "Please pass a positive sequence number.")
+    EventPosition(seqNo = seqNo, isInclusive = isInclusive)
+  }
+
+  /**
+    * Creates a position at the given [[Instant]]
+    *
+    * @param enqueuedTime is the enqueued time of the specified event.
+    * @return An [[EventPosition]] instance.
+    */
+  def fromEnqueuedTime(enqueuedTime: Instant, isInclusive: Boolean): EventPosition = {
+    EventPosition(enqueuedTime = Date.from(enqueuedTime), isInclusive = isInclusive)
+  }
+
+  /**
+    * Returns the position for the start of a stream. Provide this position to your
+    * [[EventHubsConf]] to start receiving from the first available event in the partition.
+    *
+    * @return An [[EventPosition]] instance.
+    */
   def fromStartOfStream: EventPosition = {
     EventPosition(StartOfStream)
   }

@@ -22,15 +22,17 @@
 
 
   <modelVersion>4.0.0</modelVersion>
-
-  <groupId>com.microsoft.azure</groupId>
-  <artifactId>azure-eventhubs-spark-parent_2.11</artifactId>
-  <version>2.2.2</version>
-  <packaging>pom</packaging>
-
-  <name>EventHubs+Spark Parent POM</name>
+  <parent>
+    <groupId>org.sonatype.oss</groupId>
+    <artifactId>oss-parent</artifactId>
+    <version>9</version>
+  </parent>
+    <groupId>io.github.tilumi</groupId>
+    <artifactId>azure-eventhubs-spark_2.11</artifactId>
+    <version>2.2.5</version>
+    <packaging>jar</packaging>
   <description>Libraries to connect (and demonstrate) Azure Event Hubs with Apache Spark.</description>
-  <url>https://github.com/Azure/azure-event-hubs-spark</url>
+  <url>https://github.com/tilumi/azure-event-hubs-spark</url>
 
   <licenses>
     <license>
@@ -39,85 +41,18 @@
     </license>
   </licenses>
 
-  <developers>
-    <developer>
-      <name>Sabee Grewal</name>
-      <email>sagrewal@microsoft.com</email>
-      <organization>Microsoft Corporation</organization>
-      <organizationUrl>http://www.microsoft.com</organizationUrl>
-    </developer>
-  </developers>
-
   <properties>
     <sbt.project.name>azure-eventhubs-spark-parent</sbt.project.name>
     <scala.binary.version>2.11</scala.binary.version>
-    <spark.version>2.1.0</spark.version>
+    <spark.version>2.2.0</spark.version>
     <github.global.server>github</github.global.server>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
   </properties>
-
-  <modules>
-    <module>core</module>
-  </modules>
-
-  <profiles>
-      <!-- Profile to release a staging version to github. mvn clean deploy -Prelease-to-github -DskipTests-->
-    <profile>
-      <id>release-to-github</id>
-      <distributionManagement>
-        <repository>
-          <id>github.repo</id>
-          <name>Temporary Staging Repository</name>
-          <url>file://${project.build.directory}/mvn-repo</url>
-        </repository>
-      </distributionManagement>
-      <properties>
-        <github.global.server>github</github.global.server>
-      </properties>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>com.github.github</groupId>
-            <artifactId>site-maven-plugin</artifactId>
-            <version>0.12</version>
-            <configuration>
-              <message>Maven artifacts for ${project.version}</message>
-              <noJekyll>true</noJekyll>
-              <outputDirectory>${project.build.directory}/mvn-repo</outputDirectory>
-              <branch>refs/heads/maven-repo</branch>
-              <includes><include>**/*</include></includes>
-              <repositoryName>azure-event-hubs-spark</repositoryName>
-              <repositoryOwner>Azure</repositoryOwner>
-              <merge>true</merge>
-            </configuration>
-            <executions>
-              <!-- run site-maven-plugin's 'site' target as part of the build's normal 'deploy' phase -->
-              <execution>
-                <goals>
-                  <goal>site</goal>
-                </goals>
-                <phase>deploy</phase>
-              </execution>
-            </executions>
-          </plugin>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-deploy-plugin</artifactId>
-            <version>2.8.2</version>
-            <configuration>
-              <altDeploymentRepository>internal.repo::default::file://${project.build.directory}/mvn-repo</altDeploymentRepository>
-            </configuration>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-  </profiles>
-
   <scm>
-    <connection>scm:git:git:/github.com/Azure/azure-event-hubs-spark.git</connection>
-    <developerConnection>scm:git:ssh://github.com/Azure/azure-event-hubs-spark.git</developerConnection>
-    <url>https://github.com/Azure/azure-event-hubs-spark/tree/master</url>
+    <connection>scm:git:git:/github.com/tilumi/azure-event-hubs-spark.git</connection>
+    <developerConnection>scm:git:ssh://github.com/tilumi/azure-event-hubs-spark.git</developerConnection>
+    <url>https://github.com/tilumi/azure-event-hubs-spark/tree/master</url>
   </scm>
 
 <dependencies>
@@ -168,7 +103,25 @@
       <scope>test</scope>
       <version>2.2.6</version>
     </dependency>
+    <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-catalyst_${scala.binary.version}</artifactId>
+        <version>${spark.version}</version>
+        <type>test-jar</type>
+        <scope>test</scope>
+    </dependency>
   </dependencies>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+    </distributionManagement>
 
   <build>
     <outputDirectory>target/scala-${scala.binary.version}/classes</outputDirectory>
@@ -237,6 +190,64 @@
           </execution>
         </executions>
       </plugin>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-assembly-plugin</artifactId>
+            <configuration>
+                <skipAssembly>false</skipAssembly>
+            </configuration>
+        </plugin>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>2.2.1</version>
+            <executions>
+                <execution>
+                    <id>attach-sources</id>
+                    <goals>
+                        <goal>jar-no-fork</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>2.9.1</version>
+            <executions>
+                <execution>
+                    <id>attach-javadocs</id>
+                    <goals>
+                        <goal>jar</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>1.5</version>
+            <executions>
+                <execution>
+                    <id>sign-artifacts</id>
+                    <phase>verify</phase>
+                    <goals>
+                        <goal>sign</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+        <plugin>
+            <groupId>org.sonatype.plugins</groupId>
+            <artifactId>nexus-staging-maven-plugin</artifactId>
+            <version>1.6.7</version>
+            <extensions>true</extensions>
+            <configuration>
+                <serverId>ossrh</serverId>
+                <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                <autoReleaseAfterClose>true</autoReleaseAfterClose>
+            </configuration>
+        </plugin>
     </plugins>
   </build>
 </project>

@@ -78,7 +78,7 @@ class EventHubsRelationSuite extends QueryTest with BeforeAndAfter with SharedSQ
     testUtils.send(eh, partition = Some(2), data = 20 to 29)
 
     val ehConf = getEventHubsConf(eh)
-      .setStartingPositions(Map.empty)
+      .setStartingPositions(Map.empty[NameAndPartition, EventPosition])
       .setEndingPositions(Map.empty)
 
     val df = createDF(ehConf)
@@ -109,7 +109,7 @@ class EventHubsRelationSuite extends QueryTest with BeforeAndAfter with SharedSQ
     testUtils.send(eh, partition = Some(0), data = 0 to 10)
 
     val ehConf = getEventHubsConf(eh)
-      .setStartingPositions(Map.empty)
+      .setStartingPositions(Map.empty[NameAndPartition, EventPosition])
       .setEndingPositions(Map.empty)
 
     val df = createDF(ehConf)

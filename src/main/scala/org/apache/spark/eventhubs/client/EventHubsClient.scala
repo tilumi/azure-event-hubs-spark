@@ -264,9 +264,9 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
   }
 }
 
-private[spark] object EventHubsClient {
+object EventHubsClient {
 
-  private[spark] def apply(ehConf: EventHubsConf): EventHubsClient =
+  def apply(ehConf: EventHubsConf): EventHubsClient =
     new EventHubsClient(ehConf)
 
   /**

@@ -420,7 +420,7 @@ class EventHubsSourceSuite extends EventHubsSourceTest {
     testUtils.createEventHubs(eh, partitionCount = 1)
 
     val conf = getEventHubsConf(eh)
-      .setStartingPositions(Map.empty)
+      .setStartingPositions(Map.empty[NameAndPartition, EventPosition])
       .setStartingPosition(EventPosition.fromSequenceNumber(0L))
 
     require(testUtils.getEventHubs(eh).getPartitions.size === 1)
@@ -462,7 +462,7 @@ class EventHubsSourceSuite extends EventHubsSourceTest {
     testUtils.createEventHubs(eh, partitionCount = 1)
 
     val conf = getEventHubsConf(eh)
-      .setStartingPositions(Map.empty)
+      .setStartingPositions(Map.empty[NameAndPartition, EventPosition])
       .setStartingPosition(EventPosition.fromSequenceNumber(0L))
 
     require(testUtils.getEventHubs(eh).getPartitions.size === 1)

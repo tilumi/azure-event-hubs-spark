@@ -181,6 +181,13 @@ final class EventHubsConf private (private val connectionStr: String)
     set(StartingPositionKey, EventHubsConf.write(eventPosition))
   }
 
+  def setStartingPosition(eventPosition: Option[EventPosition]): EventHubsConf = {
+    eventPosition match {
+      case Some(position) => set(StartingPositionKey, EventHubsConf.write(position))
+      case None => this
+    }
+  }
+
   /**
    * The currently set starting position.
    * @see [[EventPosition]]
@@ -202,6 +209,13 @@ final class EventHubsConf private (private val connectionStr: String)
   def setStartingPositions(eventPositions: Map[NameAndPartition, EventPosition]): EventHubsConf = {
     val m = eventPositions.map { case (k, v) => k.toString -> v }
     set(StartingPositionsKey, EventHubsConf.write[Map[String, EventPosition]](m))
+  }
+
+  def setStartingPositions(eventPosition: Option[Map[NameAndPartition, EventPosition]]): EventHubsConf = {
+    eventPosition match {
+      case Some(positions) => setStartingPositions(positions)
+      case None => this
+    }
   }
 
   /**
@@ -426,7 +440,7 @@ object EventHubsConf extends Logging {
   /** Creates an EventHubsConf */
   def apply(connectionString: String) = new EventHubsConf(connectionString)
 
-  private[spark] def toConf(params: Map[String, String]): EventHubsConf = {
+  def toConf(params: Map[String, String]): EventHubsConf = {
     val caseInsensitiveMap = params.map {
       case (k, v) => (k.toLowerCase(Locale.ROOT), v)
     }

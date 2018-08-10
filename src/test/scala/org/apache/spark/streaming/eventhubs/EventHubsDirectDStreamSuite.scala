@@ -185,7 +185,7 @@ class EventHubsDirectDStreamSuite
     testDir = Utils.createTempDir()
 
     val ehConf = getEventHubsConf(eventHub.name)
-      .setStartingPositions(Map.empty)
+      .setStartingPositions(Map.empty[NameAndPartition, EventPosition])
       .setStartingPosition(EventPosition.fromSequenceNumber(0L))
 
     // Setup the streaming context

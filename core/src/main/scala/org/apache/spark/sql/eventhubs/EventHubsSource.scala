@@ -64,7 +64,7 @@ import org.apache.spark.sql.{ DataFrame, SQLContext }
  */
 private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
                                                          parameters: Map[String, String],
-                                                         metadataPath: String)
+                                                         metadataPathOption: Option[String])
     extends Source
     with Logging {
 
@@ -83,7 +83,7 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     Option(parameters.get(MaxEventsPerTriggerKey).map(_.toLong).getOrElse(partitionCount * 1000))
 
   private lazy val initialPartitionSeqNos = {
-    val metadataLog =
+    val metadataLog = metadataPathOption.map{metadataPath =>
       new HDFSMetadataLog[EventHubsSourceOffset](sqlContext.sparkSession, metadataPath) {
         override def serialize(metadata: EventHubsSourceOffset, out: OutputStream): Unit = {
           out.write(0) // SPARK-19517
@@ -112,21 +112,18 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
           }
         }
       }
-
-    metadataLog
-      .get(0)
-      .getOrElse {
+    }
+    metadataLog.flatMap(_.get(0)).getOrElse {
         // translate starting points within ehConf to sequence numbers
         val seqNos = ehClient.translate(ehConf, partitionCount).map {
           case (pId, seqNo) =>
             (NameAndPartition(ehName, pId), seqNo)
         }
         val offset = EventHubsSourceOffset(seqNos)
-        metadataLog.add(0, offset)
+        metadataLog.map(_.add(0, offset))
         logInfo(s"Initial sequence numbers: $seqNos")
         offset
-      }
-      .partitionToSeqNos
+      }.partitionToSeqNos
   }
 
   private var currentSeqNos: Option[Map[NameAndPartition, SequenceNumber]] = None

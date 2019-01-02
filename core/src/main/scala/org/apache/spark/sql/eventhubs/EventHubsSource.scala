@@ -62,16 +62,16 @@ import org.apache.spark.sql.{ DataFrame, SQLContext }
  * all batches. That way receivers are cached and reused efficiently.
  * This allows events to be prefetched before they're needed by Spark.
  */
-private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
-                                                         parameters: Map[String, String],
-                                                         metadataPathOption: Option[String])
+class EventHubsSource (sqlContext: SQLContext,
+                       parameters: Map[String, String],
+                       metadataPathOption: Option[String])
     extends Source
     with Logging {
 
   import EventHubsConf._
   import EventHubsSource._
 
-  private lazy val ehClient = EventHubsSourceProvider.clientFactory(parameters)(ehConf)
+  lazy val ehClient = EventHubsSourceProvider.clientFactory(parameters)(ehConf)
   private lazy val partitionCount: Int = ehClient.partitionCount
 
   private val ehConf = EventHubsConf.toConf(parameters)
@@ -227,7 +227,7 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     if (start.isDefined && start.get == end) {
       return sqlContext.internalCreateDataFrame(sqlContext.sparkContext.emptyRDD,
                                                 schema,
-                                                isStreaming = true)
+                                                isStreaming = false)
     }
     val fromSeqNos = start match {
       case Some(prevBatchEndOffset) =>
@@ -283,7 +283,7 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     logInfo(
       "GetBatch generating RDD of offset range: " +
         offsetRanges.sortBy(_.nameAndPartition.toString).mkString(", "))
-    sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
+    sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = false)
   }
 
   /**

@@ -79,7 +79,7 @@ private[sql] class EventHubsSourceProvider
     EventHubsClient.userAgent =
       s"Structured-Streaming-${sqlContext.sparkSession.sparkContext.version}"
 
-    new EventHubsSource(sqlContext, parameters, metadataPath)
+    new EventHubsSource(sqlContext, parameters, Some(metadataPath))
   }
 
   /**

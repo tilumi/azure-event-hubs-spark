@@ -23,7 +23,7 @@ import org.apache.spark.sql.execution.streaming.{ Offset, SerializedOffset }
 /**
  * An [[Offset]] for the [[EventHubsSource]]. This tracks all partitions and their offsets.
  */
-private[eventhubs] case class EventHubsSourceOffset(
+case class EventHubsSourceOffset(
     partitionToSeqNos: Map[NameAndPartition, SequenceNumber])
     extends Offset {
 
@@ -33,7 +33,7 @@ private[eventhubs] case class EventHubsSourceOffset(
 /**
  * A companion object of the [[EventHubsSourceOffset]].
  */
-private[eventhubs] object EventHubsSourceOffset {
+object EventHubsSourceOffset {
 
   def getPartitionSeqNos(offset: Offset): Map[NameAndPartition, SequenceNumber] = {
     offset match {

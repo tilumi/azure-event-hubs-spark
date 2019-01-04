@@ -18,15 +18,15 @@
 package org.apache.spark.eventhubs.client
 
 import com.microsoft.azure.eventhubs._
-import org.apache.spark.eventhubs.utils.RetryUtils.{ retryJava, retryNotNull }
-import org.apache.spark.{ SparkEnv, TaskContext }
-import org.apache.spark.eventhubs.{ EventHubsConf, NameAndPartition, SequenceNumber }
+import org.apache.spark.eventhubs.utils.RetryUtils.{retryJava, retryNotNull}
+import org.apache.spark.{SparkEnv, TaskContext}
+import org.apache.spark.eventhubs.{EventHubsConf, NameAndPartition, SequenceNumber}
 import org.apache.spark.internal.Logging
 
-import scala.concurrent.{ Await, Future }
+import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.JavaConverters._
-import scala.util.Success
+import scala.util.{Failure, Success, Try}
 
 private[spark] trait CachedReceiver {
   private[eventhubs] def receive(ehConf: EventHubsConf,
@@ -125,28 +125,41 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
   }
 
   private def receive(requestSeqNo: SequenceNumber, batchSize: Int): Iterator[EventData] = {
-    // Retrieve the events. First, we get the first event in the batch.
-    // Then, if the succeeds, we collect the rest of the data.
-    val first = Await.result(checkCursor(requestSeqNo), InternalOperationTimeout)
-    val theRest = for { i <- 1 until batchSize } yield
-      Await.result(receiveOne(s"receive; $nAndP; seqNo: ${requestSeqNo + i}"),
-                   InternalOperationTimeout)
-    // Combine and sort the data.
-    val combined = first ++ theRest.flatten
-    val sorted = combined.toSeq
-      .sortWith((e1, e2) =>
-        e1.getSystemProperties.getSequenceNumber < e2.getSystemProperties.getSequenceNumber)
-      .iterator
-
-    val newPrefetchCount =
-      if (batchSize < PrefetchCountMinimum) PrefetchCountMinimum else batchSize * 2
-    receiver.onComplete {
-      case Success(r) => r.setPrefetchCount(newPrefetchCount)
-      case _          =>
+    val retryCount = 3
+    var retried = 0
+    var result: Option[Iterator[EventData]] = None
+    while(retried < retryCount && result.isEmpty) {
+      Try {
+        // Retrieve the events. First, we get the first event in the batch.
+        // Then, if the succeeds, we collect the rest of the data.
+        val first = Await.result(checkCursor(requestSeqNo), ReceiveTimeout)
+        val theRest = for {i <- 1 until batchSize} yield
+          Await.result(receiveOne(s"receive; $nAndP; seqNo: ${requestSeqNo + i}"),
+            ReceiveTimeout)
+        // Combine and sort the data.
+        val combined = first ++ theRest.flatten
+        val sorted = combined.toSeq
+          .sortWith((e1, e2) =>
+            e1.getSystemProperties.getSequenceNumber < e2.getSystemProperties.getSequenceNumber)
+          .iterator
+        val newPrefetchCount =
+          if (batchSize < PrefetchCountMinimum) PrefetchCountMinimum else batchSize * 2
+        receiver.onComplete {
+          case Success(r) => r.setPrefetchCount(newPrefetchCount)
+          case _ =>
+        }
+        val (result, validate) = sorted.duplicate
+        assert(validate.size == batchSize)
+        result
+      } match {
+        case Success(iterator) =>
+          result = Some(iterator)
+        case Failure(exception) =>
+          logError("Receive timeout", exception)
+      }
+      retried += 1
     }
-    val (result, validate) = sorted.duplicate
-    assert(validate.size == batchSize)
-    result
+    result.getOrElse(Iterator.empty)
   }
 }
 

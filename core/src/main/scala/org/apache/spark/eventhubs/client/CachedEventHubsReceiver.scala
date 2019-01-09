@@ -93,7 +93,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
   }
 
   private def checkCursor(requestSeqNo: SequenceNumber): Future[Iterable[EventData]] = {
-    val event = Await.result(receiveOne("checkCursor initial"), InternalOperationTimeout)
+    val event = Await.result(receiveOne("checkCursor initial"), ReceiveTimeout)
     val receivedSeqNo = event.head.getSystemProperties.getSequenceNumber
 
     if (receivedSeqNo != requestSeqNo) {
@@ -103,14 +103,14 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       // 2) Your desired event has expired from the service.
       // First, we'll check for case (1).
       receiver = createReceiver(requestSeqNo)
-      val movedEvent = Await.result(receiveOne("checkCursor move"), InternalOperationTimeout)
+      val movedEvent = Await.result(receiveOne("checkCursor move"), ReceiveTimeout)
       val movedSeqNo = movedEvent.head.getSystemProperties.getSequenceNumber
       if (movedSeqNo != requestSeqNo) {
         // The event still isn't present. It must be (2).
         val info = Await.result(
           retryJava(client.getPartitionRuntimeInformation(nAndP.partitionId.toString),
                     "partitionRuntime"),
-          InternalOperationTimeout)
+          ReceiveTimeout)
         val consumerGroup = ehConf.consumerGroup.getOrElse(DefaultConsumerGroup)
         throw new IllegalStateException(
           s"In partition ${info.getPartitionId} of ${info.getEventHubPath}, with consumer group $consumerGroup, " +
@@ -124,7 +124,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     }
   }
 
-  private def receive(requestSeqNo: SequenceNumber, batchSize: Int): Iterator[EventData] = {
+  private def receive(requestSeqNo: SequenceNumber, batchSize: Int, receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit]): Iterator[EventData] = {
     val retryCount = 3
     var retried = 0
     var result: Option[Iterator[EventData]] = None
@@ -155,11 +155,19 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         case Success(iterator) =>
           result = Some(iterator)
         case Failure(exception) =>
-          logError("Receive timeout", exception)
+          logWarning("Receive timeout", exception)
       }
       retried += 1
     }
-    result.getOrElse(Iterator.empty)
+    result.getOrElse({
+      logWarning(
+        s"Abandon the partition: " +
+          s"${ConnectionStringBuilder(ehConf.connectionString).getEndpoint.getHost}-${nAndP.ehName}:${nAndP.partitionId}, " +
+          s"requestSeqNo: $requestSeqNo, batchSize: $batchSize"
+      )
+      receiveTimeoutHandler.foreach(_.apply(nAndP, requestSeqNo, batchSize))
+      Seq.empty[EventData].iterator
+    })
   }
 }
 
@@ -189,12 +197,15 @@ private[spark] object CachedEventHubsReceiver extends CachedReceiver with Loggin
         CachedEventHubsReceiver(ehConf, nAndP, requestSeqNo)
       })
     }
-    receiver.receive(requestSeqNo, batchSize)
+    receiver.receive(requestSeqNo, batchSize, ehConf.receiveTimeoutHandler)
   }
 
   def apply(ehConf: EventHubsConf,
             nAndP: NameAndPartition,
             startSeqNo: SequenceNumber): CachedEventHubsReceiver = {
-    new CachedEventHubsReceiver(ehConf, nAndP, startSeqNo)
+    new CachedEventHubsReceiver(
+      ehConf,
+      nAndP,
+      startSeqNo)
   }
 }

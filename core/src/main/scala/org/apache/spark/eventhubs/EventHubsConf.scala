@@ -347,6 +347,14 @@ final class EventHubsConf private (private val connectionStr: String, val receiv
 
   }
 
+  def setReceiveRetryTimes(times: Int): EventHubsConf = {
+    set(ReceiveRetryTimes, times)
+  }
+
+  def receiveRetryTimes: Option[Int] = {
+    self.get(ReceiveRetryTimes) map (str => Integer.parseInt(str))
+  }
+
   /**
    * Set the operation timeout. We will retryJava failures when contacting the
    * EventHubs service for the length of this timeout.
@@ -421,6 +429,7 @@ object EventHubsConf extends Logging {
   val MaxRatesPerPartitionKey = "eventhubs.maxRatesPerPartition"
   val ReceiverTimeoutKey = "eventhubs.receiverTimeout"
   val OperationTimeoutKey = "eventhubs.operationTimeout"
+  val ReceiveRetryTimes = "eventhubs.receiveRetryTimes"
   val MaxEventsPerTriggerKey = "maxEventsPerTrigger"
   val UseSimulatedClientKey = "useSimulatedClient"
 

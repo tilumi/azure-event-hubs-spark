@@ -26,6 +26,7 @@ import org.apache.spark.internal.Logging
 import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success, Try}
 
 private[spark] trait CachedReceiver {
@@ -93,7 +94,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
   }
 
   private def checkCursor(requestSeqNo: SequenceNumber): Future[Iterable[EventData]] = {
-    val event = Await.result(receiveOne("checkCursor initial"), ReceiveTimeout)
+    val event = Await.result(receiveOne("checkCursor initial"), ehConf.receiverTimeout.map{timeout => Duration.fromNanos(timeout.toNanos)}.getOrElse(DefaultReceiveTimeout))
     val receivedSeqNo = event.head.getSystemProperties.getSequenceNumber
 
     if (receivedSeqNo != requestSeqNo) {
@@ -103,14 +104,14 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       // 2) Your desired event has expired from the service.
       // First, we'll check for case (1).
       receiver = createReceiver(requestSeqNo)
-      val movedEvent = Await.result(receiveOne("checkCursor move"), ReceiveTimeout)
+      val movedEvent = Await.result(receiveOne("checkCursor move"), ehConf.receiverTimeout.map{timeout => Duration.fromNanos(timeout.toNanos)}.getOrElse(DefaultReceiveTimeout))
       val movedSeqNo = movedEvent.head.getSystemProperties.getSequenceNumber
       if (movedSeqNo != requestSeqNo) {
         // The event still isn't present. It must be (2).
         val info = Await.result(
           retryJava(client.getPartitionRuntimeInformation(nAndP.partitionId.toString),
                     "partitionRuntime"),
-          ReceiveTimeout)
+          ehConf.receiverTimeout.map{timeout => Duration.fromNanos(timeout.toNanos)}.getOrElse(DefaultReceiveTimeout))
         val consumerGroup = ehConf.consumerGroup.getOrElse(DefaultConsumerGroup)
         throw new IllegalStateException(
           s"In partition ${info.getPartitionId} of ${info.getEventHubPath}, with consumer group $consumerGroup, " +
@@ -125,17 +126,17 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
   }
 
   private def receive(requestSeqNo: SequenceNumber, batchSize: Int, receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit]): Iterator[EventData] = {
-    val retryCount = 3
+    val retryCount = ehConf.receiveRetryTimes.getOrElse(DefaultReceiveRetryTimes)
     var retried = 0
     var result: Option[Iterator[EventData]] = None
     while(retried < retryCount && result.isEmpty) {
       Try {
         // Retrieve the events. First, we get the first event in the batch.
         // Then, if the succeeds, we collect the rest of the data.
-        val first = Await.result(checkCursor(requestSeqNo), ReceiveTimeout)
+        val first = Await.result(checkCursor(requestSeqNo), ehConf.receiverTimeout.map{timeout => Duration.fromNanos(timeout.toNanos)}.getOrElse(DefaultReceiveTimeout))
         val theRest = for {i <- 1 until batchSize} yield
           Await.result(receiveOne(s"receive; $nAndP; seqNo: ${requestSeqNo + i}"),
-            ReceiveTimeout)
+            ehConf.receiverTimeout.map{timeout => Duration.fromNanos(timeout.toNanos)}.getOrElse(DefaultReceiveTimeout))
         // Combine and sort the data.
         val combined = first ++ theRest.flatten
         val sorted = combined.toSeq

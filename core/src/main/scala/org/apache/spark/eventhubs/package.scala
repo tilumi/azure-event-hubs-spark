@@ -49,7 +49,8 @@ package object eventhubs {
   val DefaultEpoch = 0L
   val RetryCount = 3
   val InternalOperationTimeout: FiniteDuration = 300.seconds
-  val ReceiveTimeout: FiniteDuration = 20.seconds
+  val DefaultReceiveTimeout: FiniteDuration = 20.seconds
+  val DefaultReceiveRetryTimes: Int = 3
 
   val OffsetAnnotation = "x-opt-offset"
   val EnqueuedTimeAnnotation = "x-opt-enqueued-time"

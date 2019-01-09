@@ -49,7 +49,6 @@ final class EventHubsConf private (private val connectionStr: String, val receiv
     with Cloneable { self =>
 
   import EventHubsConf._
-  def this(connectionStr: String) = this(connectionStr, None)
 
   private val settings = new ConcurrentHashMap[String, String]()
   this.setConnectionString(connectionStr)
@@ -434,7 +433,7 @@ object EventHubsConf extends Logging {
   val UseSimulatedClientKey = "useSimulatedClient"
 
   /** Creates an EventHubsConf */
-  def apply(connectionString: String) = new EventHubsConf(connectionString)
+  def apply(connectionString: String) = new EventHubsConf(connectionString, None)
 
   def apply(connectionString: String,
             receiveTimeoutHandler: (NameAndPartition, SequenceNumber, Int) => Unit) =

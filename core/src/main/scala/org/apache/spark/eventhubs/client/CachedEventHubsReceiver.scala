@@ -165,6 +165,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           s"${ConnectionStringBuilder(ehConf.connectionString).getEndpoint.getHost}-${nAndP.ehName}:${nAndP.partitionId}, " +
           s"requestSeqNo: $requestSeqNo, batchSize: $batchSize"
       )
+      logInfo(s"TimeoutHandler: ${receiveTimeoutHandler}")
       receiveTimeoutHandler.foreach(handler => {
         logInfo(s"Execute handler $handler")
         handler.apply(nAndP, requestSeqNo, batchSize)

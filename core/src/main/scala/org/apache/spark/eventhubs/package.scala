@@ -19,10 +19,11 @@ package org.apache.spark
 
 import java.time.Duration
 
-import com.microsoft.azure.eventhubs.{ EventHubClient, PartitionReceiver }
+import com.microsoft.azure.eventhubs.{EventHubClient, PartitionReceiver}
 import org.json4s.NoTypeHints
 import org.json4s.jackson.Serialization
 
+import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
 
 /**
@@ -39,17 +40,18 @@ package object eventhubs {
   val DefaultEndingPosition: EventPosition = EventPosition.fromEndOfStream
   val DefaultMaxRatePerPartition: Rate = 1000
   val DefaultReceiverTimeout: Duration = Duration.ofSeconds(60)
-  val DefaultOperationTimeout: Duration = Duration.ofSeconds(60)
+  val DefaultOperationTimeout: Duration = Duration.ofSeconds(300)
   val DefaultConsumerGroup: String = EventHubClient.DEFAULT_CONSUMER_GROUP_NAME
   val PrefetchCountMinimum: Int = PartitionReceiver.MINIMUM_PREFETCH_COUNT
-  val DefaultPrefetchCount: Int = 2000
+  val PrefetchCountMaximum: Int = 2000
+  val DefaultPrefetchCount: Int = PartitionReceiver.DEFAULT_PREFETCH_COUNT
   val DefaultFailOnDataLoss = "true"
   val DefaultUseSimulatedClient = "false"
   val StartingSequenceNumber = 0L
+  val DefaultThreadPoolSize = 16
   val DefaultEpoch = 0L
   val RetryCount = 3
   val InternalOperationTimeout: FiniteDuration = 300.seconds
-  val DefaultReceiveTimeout: FiniteDuration = 20.seconds
   val DefaultReceiveRetryTimes: Int = 3
 
   val OffsetAnnotation = "x-opt-offset"
@@ -74,9 +76,14 @@ package object eventhubs {
   // Allow Strings to be converted to types defined in this library.
   implicit class EventHubsString(val str: String) extends AnyVal {
     def toPartitionId: PartitionId = str.toInt
+
     def toRate: Rate = str.toInt
+
     def toOffset: Offset = str.toLong
+
     def toEnqueueTime: EnqueueTime = str.toLong
+
     def toSequenceNumber: SequenceNumber = str.toLong
   }
+
 }

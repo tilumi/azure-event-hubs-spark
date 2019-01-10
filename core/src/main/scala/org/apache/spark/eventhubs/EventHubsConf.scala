@@ -26,6 +26,7 @@ import org.json4s.NoTypeHints
 import org.json4s.jackson.Serialization
 
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.FiniteDuration
 import scala.language.implicitConversions
 
 /**
@@ -40,13 +41,14 @@ import scala.language.implicitConversions
  * If more than one of those are provided, you will get a runtime error.
  *
  * @param connectionStr a valid connection string which will be used to connect to
- *                         an EventHubs instance. A connection string can be obtained from
- *                         the Azure portal or by using [[ConnectionStringBuilder]].
+ *                      an EventHubs instance. A connection string can be obtained from
+ *                      the Azure portal or by using [[ConnectionStringBuilder]].
  */
 final class EventHubsConf private (private val connectionStr: String)
     extends Serializable
     with Logging
-    with Cloneable { self =>
+    with Cloneable {
+  self =>
 
   import EventHubsConf._
 
@@ -106,6 +108,7 @@ final class EventHubsConf private (private val connectionStr: String)
 
   /**
    * Indicates if some EventHubsConf is equal to this one.
+   *
    * @param obj the object being compared
    * @return true if they are equal; otherwise, return false
    */
@@ -151,11 +154,14 @@ final class EventHubsConf private (private val connectionStr: String)
    */
   private[spark] def trimmed: EventHubsConf = {
     // These are the options needed by Spark executors
-    val include = Seq("eventhubs.connectionString",
-                      "eventhubs.consumerGroup",
-                      "eventhubs.receiverTimeout",
-                      "eventhubs.operationTimeout",
-                      "useSimulatedClient").map(_.toLowerCase).toSet
+    val include = Seq(
+      "eventhubs.connectionString",
+      "eventhubs.consumerGroup",
+      "eventhubs.receiverTimeout",
+      "eventhubs.operationTimeout",
+      "eventhubs.prefetchCount",
+      "useSimulatedClient"
+    ).map(_.toLowerCase).toSet
 
     val trimmedConfig = EventHubsConf(connectionString)
     settings.asScala
@@ -203,6 +209,7 @@ final class EventHubsConf private (private val connectionStr: String)
 
   /**
    * The currently set starting position.
+   *
    * @see [[EventPosition]]
    */
   def startingPosition: Option[EventPosition] = {
@@ -226,6 +233,7 @@ final class EventHubsConf private (private val connectionStr: String)
 
   /**
    * The currently set positions for particular partitions.
+   *
    * @see [[EventPosition]]
    */
   def startingPositions: Option[Map[NameAndPartition, EventPosition]] = {
@@ -251,6 +259,7 @@ final class EventHubsConf private (private val connectionStr: String)
 
   /**
    * The currently set starting position.
+   *
    * @see [[EventPosition]]
    */
   def endingPosition: Option[EventPosition] = {
@@ -274,6 +283,7 @@ final class EventHubsConf private (private val connectionStr: String)
 
   /**
    * the currently set positions for particular partitions.
+   *
    * @see [[EventPosition]]
    */
   def endingPositions: Option[Map[NameAndPartition, EventPosition]] = {
@@ -343,7 +353,6 @@ final class EventHubsConf private (private val connectionStr: String)
   /** The current receiver timeout.  */
   def receiverTimeout: Option[Duration] = {
     self.get(ReceiverTimeoutKey) map (str => Duration.parse(str))
-
   }
 
   def setReceiveRetryTimes(times: Int): EventHubsConf = {
@@ -369,6 +378,31 @@ final class EventHubsConf private (private val connectionStr: String)
   /** The current operation timeout. */
   def operationTimeout: Option[Duration] = {
     self.get(OperationTimeoutKey) map (str => Duration.parse(str))
+  }
+
+  /** This is the exact same thing as operationTimeout, the only difference is in the types
+   * (Java Duration vs Scala FiniteDuration)
+   */
+  private[spark] lazy val internalOperationTimeout: FiniteDuration = {
+    scala.concurrent.duration.Duration
+      .fromNanos(operationTimeout.getOrElse(DefaultOperationTimeout).toNanos)
+  }
+
+  /**
+   * Set the prefetch count for the underlying receiver.
+   * PrefetchCount controls how many events are received in advance.
+   * Default: [[DefaultPrefetchCount]]
+   *
+   * @param count the new prefetch count
+   * @return the updated [[EventHubsConf]] instance
+   */
+  def setPrefetchCount(count: Int): EventHubsConf = {
+    set(PrefetchCountKey, count)
+  }
+
+  /** The current prefetch count.  */
+  def prefetchCount: Option[Int] = {
+    self.get(PrefetchCountKey) map (str => str.toInt)
   }
 
   /**
@@ -429,6 +463,7 @@ object EventHubsConf extends Logging {
   val ReceiverTimeoutKey = "eventhubs.receiverTimeout"
   val OperationTimeoutKey = "eventhubs.operationTimeout"
   val ReceiveRetryTimes = "eventhubs.receiveRetryTimes"
+  val PrefetchCountKey = "eventhubs.prefetchCount"
   val MaxEventsPerTriggerKey = "maxEventsPerTrigger"
   val UseSimulatedClientKey = "useSimulatedClient"
 
@@ -441,7 +476,9 @@ object EventHubsConf extends Logging {
 
     val ehConf = EventHubsConf(connectionString)
 
-    for ((k, v) <- params) { ehConf.set(k, v) }
+    for ((k, v) <- params) {
+      ehConf.set(k, v)
+    }
 
     ehConf
   }

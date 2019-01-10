@@ -25,11 +25,11 @@ import org.apache.spark.internal.Logging
 import org.json4s.NoTypeHints
 import org.json4s.jackson.Serialization
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import collection.JavaConverters._
-import scala.concurrent.{ Await, Future }
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{ Await, Future }
 
 /**
  * A [[Client]] which connects to an event hub instance. All interaction
@@ -48,6 +48,7 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
   private implicit val formats = Serialization.formats(NoTypeHints)
 
   private var _client: EventHubClient = _
+
   private def client = synchronized {
     if (_client == null) {
       _client = ClientConnectionPool.borrowClient(ehConf)
@@ -57,6 +58,7 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
 
   // TODO support multiple partitions senders
   private var partitionSender: PartitionSender = _
+
   override def createPartitionSender(partition: Int): Unit = {
     val id = partition.toString
     if (partitionSender == null) {
@@ -114,12 +116,15 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
       yield
         getRunTimeInfoF(i) map { r =>
           val earliest =
-            if (r.getBeginSequenceNumber == -1L) 0L else r.getBeginSequenceNumber
+            if (r.getBeginSequenceNumber == -1L) 0L
+            else {
+              if (r.getIsEmpty) r.getLastEnqueuedSequenceNumber + 1 else r.getBeginSequenceNumber
+            }
           val latest = r.getLastEnqueuedSequenceNumber + 1
           i -> (earliest, latest)
         }
     Await
-      .result(Future.sequence(futures), InternalOperationTimeout)
+      .result(Future.sequence(futures), ehConf.internalOperationTimeout)
       .toMap
   }
 
@@ -132,7 +137,8 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
    */
   private def earliestSeqNoF(partition: PartitionId): Future[SequenceNumber] = {
     getRunTimeInfoF(partition).map { r =>
-      val seqNo = r.getBeginSequenceNumber
+      val seqNo =
+        if (r.getIsEmpty) r.getLastEnqueuedSequenceNumber + 1 else r.getBeginSequenceNumber
       if (seqNo == -1L) 0L else seqNo
     }
   }
@@ -188,10 +194,10 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
    * This allows us to exclusively use sequence numbers to generate and manage
    * batches within Spark (rather than coding for many different filter types).
    *
-   * @param ehConf the [[EventHubsConf]] containing starting (or ending positions)
+   * @param ehConf         the [[EventHubsConf]] containing starting (or ending positions)
    * @param partitionCount the number of partitions in the Event Hub instance
-   * @param useStart translates starting positions when true and ending positions
-   *                 when false
+   * @param useStart       translates starting positions when true and ending positions
+   *                       when false
    * @return mapping of partitions to starting positions as sequence numbers
    */
   override def translate(ehConf: EventHubsConf,
@@ -236,20 +242,35 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
           case StartOfStream => (nAndP.partitionId, earliestSeqNoF(nAndP.partitionId))
           case EndOfStream   => (nAndP.partitionId, latestSeqNoF(nAndP.partitionId))
           case _ =>
-            val receiver = retryJava(client.createEpochReceiver(consumerGroup,
-                                                                nAndP.partitionId.toString,
-                                                                pos.convert,
-                                                                DefaultEpoch),
-                                     "translate: epoch receiver creation.")
-            val seqNo = receiver
-              .flatMap { r =>
-                retryNotNull(r.receive(1), "translate: receive call")
-              }
-              .map { e =>
-                e.iterator.next.getSystemProperties.getSequenceNumber
+            val runtimeInfo =
+              Await.result(getRunTimeInfoF(nAndP.partitionId), ehConf.internalOperationTimeout)
+            val seqNo =
+              if (runtimeInfo.getIsEmpty || (pos.enqueuedTime != null &&
+                  runtimeInfo.getLastEnqueuedTimeUtc.isBefore(pos.enqueuedTime.toInstant))) {
+                Future.successful(runtimeInfo.getLastEnqueuedSequenceNumber + 1)
+              } else {
+                logInfo(
+                  s"translate: creating receiver for Event Hub ${nAndP.ehName} on partition ${nAndP.partitionId}. filter: ${pos.convert}")
+                val receiverOptions = new ReceiverOptions
+                receiverOptions.setPrefetchCount(1)
+                val receiver = retryJava(client.createEpochReceiver(consumerGroup,
+                                                                    nAndP.partitionId.toString,
+                                                                    pos.convert,
+                                                                    DefaultEpoch,
+                                                                    receiverOptions),
+                                         "translate: epoch receiver creation.")
+                receiver
+                  .flatMap { r =>
+                    r.setReceiveTimeout(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout))
+                    retryNotNull(r.receive(1), "translate: receive call")
+                  }
+                  .map { e =>
+                    e.iterator.next.getSystemProperties.getSequenceNumber
+                  }
               }
             (nAndP.partitionId, seqNo)
         }
+
     val future = Future
       .traverse(futures) {
         case (p, f) =>
@@ -259,7 +280,7 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
       }
       .map(x => x.toMap ++ completed)
       .map(identity)
-    Await.result(future, InternalOperationTimeout)
+    Await.result(future, ehConf.internalOperationTimeout)
   }
 }
 

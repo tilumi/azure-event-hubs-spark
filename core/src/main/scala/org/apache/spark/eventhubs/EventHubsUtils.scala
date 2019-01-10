@@ -39,8 +39,8 @@ object EventHubsUtils {
    * @param ehConf the parameters for your EventHubs instance
    * @return An [[EventHubsDirectDStream]]
    */
-  def createDirectStream(ssc: StreamingContext, ehConf: EventHubsConf): EventHubsDirectDStream = {
-    new EventHubsDirectDStream(ssc, ehConf, EventHubsClient.apply)
+  def createDirectStream(ssc: StreamingContext, ehConf: EventHubsConf, receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit] = None): EventHubsDirectDStream = {
+    new EventHubsDirectDStream(ssc, ehConf, EventHubsClient.apply, receiveTimeoutHandler)
   }
 
   /**

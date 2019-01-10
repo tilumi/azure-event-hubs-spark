@@ -43,7 +43,7 @@ import scala.language.implicitConversions
  *                         an EventHubs instance. A connection string can be obtained from
  *                         the Azure portal or by using [[ConnectionStringBuilder]].
  */
-final class EventHubsConf private (private val connectionStr: String, val receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit])
+final class EventHubsConf private (private val connectionStr: String)
     extends Serializable
     with Logging
     with Cloneable { self =>
@@ -433,11 +433,7 @@ object EventHubsConf extends Logging {
   val UseSimulatedClientKey = "useSimulatedClient"
 
   /** Creates an EventHubsConf */
-  def apply(connectionString: String) = new EventHubsConf(connectionString, None)
-
-  def apply(connectionString: String,
-            receiveTimeoutHandler: (NameAndPartition, SequenceNumber, Int) => Unit) =
-    new EventHubsConf(connectionString, Some(receiveTimeoutHandler))
+  def apply(connectionString: String) = new EventHubsConf(connectionString)
 
 
   private[spark] def toConf(params: Map[String, String]): EventHubsConf = {

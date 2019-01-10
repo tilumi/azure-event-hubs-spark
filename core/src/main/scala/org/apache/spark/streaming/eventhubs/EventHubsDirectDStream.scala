@@ -49,7 +49,8 @@ import org.apache.spark.streaming.scheduler.rate.RateEstimator
  */
 private[spark] class EventHubsDirectDStream private[spark] (_ssc: StreamingContext,
                                                             ehConf: EventHubsConf,
-                                                            clientFactory: EventHubsConf => Client)
+                                                            clientFactory: EventHubsConf => Client,
+                                                            receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit] = None)
     extends InputDStream[EventData](_ssc)
     with Logging {
 
@@ -128,7 +129,7 @@ private[spark] class EventHubsDirectDStream private[spark] (_ssc: StreamingConte
     } yield
       OffsetRange(NameAndPartition(ehName, p), fromSeqNos(p), untilSeqNos(p), preferredLoc)).toArray
 
-    val rdd = new EventHubsRDD(context.sparkContext, ehConf.trimmed, offsetRanges)
+    val rdd = new EventHubsRDD(context.sparkContext, ehConf.trimmed, offsetRanges, receiveTimeoutHandler)
 
     val description = offsetRanges.map(_.toString).mkString("\n")
     logInfo(s"Starting batch at $validTime for EH: $ehName with\n $description")

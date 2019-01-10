@@ -33,7 +33,8 @@ private[spark] trait CachedReceiver {
   private[eventhubs] def receive(ehConf: EventHubsConf,
                                  nAndP: NameAndPartition,
                                  requestSeqNo: SequenceNumber,
-                                 batchSize: Int): Iterator[EventData]
+                                 batchSize: Int,
+                                 receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit] = None): Iterator[EventData]
 }
 
 /**
@@ -166,7 +167,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           s"${ConnectionStringBuilder(ehConf.connectionString).getEndpoint.getHost}-${nAndP.ehName}:${nAndP.partitionId}, " +
           s"requestSeqNo: $requestSeqNo, batchSize: $batchSize"
       )
-      logInfo(s"TimeoutHandler: ${receiveTimeoutHandler}")
+      logInfo(s"TimeoutHandler: $receiveTimeoutHandler")
       receiveTimeoutHandler.foreach(handler => {
         logInfo(s"Execute handler $handler")
         handler.apply(nAndP, requestSeqNo, batchSize)
@@ -194,7 +195,8 @@ private[spark] object CachedEventHubsReceiver extends CachedReceiver with Loggin
   private[eventhubs] override def receive(ehConf: EventHubsConf,
                                           nAndP: NameAndPartition,
                                           requestSeqNo: SequenceNumber,
-                                          batchSize: Int): Iterator[EventData] = {
+                                          batchSize: Int,
+                                          receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit] = None): Iterator[EventData] = {
     logInfo(s"EventHubsCachedReceiver look up. For $nAndP, ${ehConf.consumerGroup}")
     var receiver: CachedEventHubsReceiver = null
     receivers.synchronized {
@@ -202,7 +204,7 @@ private[spark] object CachedEventHubsReceiver extends CachedReceiver with Loggin
         CachedEventHubsReceiver(ehConf, nAndP, requestSeqNo)
       })
     }
-    receiver.receive(requestSeqNo, batchSize, ehConf.receiveTimeoutHandler)
+    receiver.receive(requestSeqNo, batchSize, receiveTimeoutHandler)
   }
 
   def apply(ehConf: EventHubsConf,

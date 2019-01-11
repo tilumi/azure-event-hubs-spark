@@ -170,11 +170,11 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       Try {
         // Retrieve the events. First, we get the first event in the batch.
         // Then, if the succeeds, we collect the rest of the data.
-        val first = Await.result(checkCursor(requestSeqNo), ehConf.internalOperationTimeout)
+        val first = Await.result(checkCursor(requestSeqNo), ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout) match { case timeout => FiniteDuration(timeout.toMillis, duration.MILLISECONDS) })
         val theRest = for {i <- 1 until batchSize} yield
           Await.result(receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout),
             s"receive; $nAndP; seqNo: ${requestSeqNo + i}"),
-            ehConf.internalOperationTimeout)
+            ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout) match { case timeout => FiniteDuration(timeout.toMillis, duration.MILLISECONDS) })
         // Combine and sort the data.
         val combined = first ++ theRest.flatten
         val sorted = combined.toSeq
@@ -187,7 +187,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       } match {
         case Success(_) =>
         case Failure(exception) =>
-          logWarning("Receive timeout", exception)
+          logWarning("Receive failure", exception)
       }
     }
     finalResult.getOrElse({

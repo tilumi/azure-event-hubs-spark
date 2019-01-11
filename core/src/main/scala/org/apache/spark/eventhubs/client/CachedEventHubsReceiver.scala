@@ -166,6 +166,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     var retried = 0
     var finalResult: Option[Iterator[EventData]] = None
     while (retried < retryCount && finalResult.isEmpty) {
+      retried += 1
       Try {
         // Retrieve the events. First, we get the first event in the batch.
         // Then, if the succeeds, we collect the rest of the data.
@@ -180,11 +181,13 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           .sortWith((e1, e2) =>
             e1.getSystemProperties.getSequenceNumber < e2.getSystemProperties.getSequenceNumber)
           .iterator
-
         val (result, validate) = sorted.duplicate
         assert(validate.size == batchSize)
         finalResult = Some(result)
-        retried += 1
+      } match {
+        case Success(_) =>
+        case Failure(exception) =>
+          logWarning("Receive timeout", exception)
       }
     }
     finalResult.getOrElse({

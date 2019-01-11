@@ -188,6 +188,9 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         case Success(_) =>
         case Failure(exception) =>
           logWarning("Receive failure", exception)
+          logInfo(
+            s"Receive failure. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo")
+          receiver = createReceiver(requestSeqNo)
       }
     }
     finalResult.getOrElse({

@@ -20,6 +20,7 @@ package org.apache.spark.eventhubs.client
 import java.time.Duration
 
 import com.microsoft.azure.eventhubs._
+import org.apache.spark.eventhubs.utils.EventHubsReceiverListener
 import org.apache.spark.eventhubs.utils.RetryUtils.{retryJava, retryNotNull}
 import org.apache.spark.eventhubs.{EventHubsConf, NameAndPartition, SequenceNumber}
 import org.apache.spark.internal.Logging
@@ -36,7 +37,7 @@ private[spark] trait CachedReceiver {
                                  nAndP: NameAndPartition,
                                  requestSeqNo: SequenceNumber,
                                  batchSize: Int,
-                                 receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit] = None): Iterator[EventData]
+                                 eventHubsReceiverListener: Option[EventHubsReceiverListener] = None): Iterator[EventData]
 }
 
 /**
@@ -161,7 +162,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     }
   }
 
-  private def receive(requestSeqNo: SequenceNumber, batchSize: Int, receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit]): Iterator[EventData] = {
+  private def receive(requestSeqNo: SequenceNumber, batchSize: Int, eventHubsReceiverListener: Option[EventHubsReceiverListener]): Iterator[EventData] = {
     val retryCount = ehConf.receiveRetryTimes.getOrElse(DefaultReceiveRetryTimes)
     var retried = 0
     var finalResult: Option[Iterator[EventData]] = None
@@ -170,6 +171,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       Try {
         // Retrieve the events. First, we get the first event in the batch.
         // Then, if the succeeds, we collect the rest of the data.
+        val start = System.currentTimeMillis()
         val first = Await.result(checkCursor(requestSeqNo), ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout) match { case timeout => FiniteDuration(timeout.toMillis, duration.MILLISECONDS) })
         val theRest = for {i <- 1 until batchSize} yield
           Await.result(receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout),
@@ -184,6 +186,9 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         val (result, validate) = sorted.duplicate
         assert(validate.size == batchSize)
         finalResult = Some(result)
+        eventHubsReceiverListener.foreach(listener => {
+          listener.onBatchReceiveSuccess(nAndP, System.currentTimeMillis() - start, batchSize)
+        })
       } match {
         case Success(_) =>
         case Failure(exception) =>
@@ -199,9 +204,8 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           s"${ConnectionStringBuilder(ehConf.connectionString).getEndpoint.getHost}-${nAndP.ehName}:${nAndP.partitionId}, " +
           s"requestSeqNo: $requestSeqNo, batchSize: $batchSize"
       )
-      receiveTimeoutHandler.foreach(handler => {
-        logInfo(s"Execute handler $handler")
-        handler.apply(nAndP, requestSeqNo, batchSize)
+      eventHubsReceiverListener.foreach(listener => {
+        listener.onBatchReceiveSkip(nAndP, requestSeqNo, batchSize)
       })
       Seq.empty[EventData].iterator
     })
@@ -227,7 +231,7 @@ private[spark] object CachedEventHubsReceiver extends CachedReceiver with Loggin
                                           nAndP: NameAndPartition,
                                           requestSeqNo: SequenceNumber,
                                           batchSize: Int,
-                                          receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit] = None): Iterator[EventData] = {
+                                          eventHubsReceiverListener: Option[EventHubsReceiverListener] = None): Iterator[EventData] = {
     logInfo(
       s"EventHubsCachedReceiver look up. For $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, batchSize: $batchSize")
     var receiver: CachedEventHubsReceiver = null
@@ -236,7 +240,7 @@ private[spark] object CachedEventHubsReceiver extends CachedReceiver with Loggin
         CachedEventHubsReceiver(ehConf, nAndP, requestSeqNo)
       })
     }
-    receiver.receive(requestSeqNo, batchSize, receiveTimeoutHandler)
+    receiver.receive(requestSeqNo, batchSize, eventHubsReceiverListener)
   }
 
   def apply(ehConf: EventHubsConf,

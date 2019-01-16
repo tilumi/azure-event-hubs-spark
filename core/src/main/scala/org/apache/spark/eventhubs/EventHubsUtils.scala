@@ -19,12 +19,13 @@ package org.apache.spark.eventhubs
 
 import com.microsoft.azure.eventhubs.EventData
 import org.apache.spark.eventhubs.client.EventHubsClient
-import org.apache.spark.eventhubs.rdd.{ EventHubsRDD, OffsetRange }
+import org.apache.spark.eventhubs.rdd.{EventHubsRDD, OffsetRange}
 import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.streaming.eventhubs.EventHubsDirectDStream
 import org.apache.spark.SparkContext
-import org.apache.spark.api.java.{ JavaRDD, JavaSparkContext }
-import org.apache.spark.streaming.api.java.{ JavaInputDStream, JavaStreamingContext }
+import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
+import org.apache.spark.eventhubs.utils.EventHubsReceiverListener
+import org.apache.spark.streaming.api.java.{JavaInputDStream, JavaStreamingContext}
 
 /**
  * Helper to create Direct DStreams which consume events from Event Hubs.
@@ -39,8 +40,8 @@ object EventHubsUtils {
    * @param ehConf the parameters for your EventHubs instance
    * @return An [[EventHubsDirectDStream]]
    */
-  def createDirectStream(ssc: StreamingContext, ehConf: EventHubsConf, receiveTimeoutHandler: Option[(NameAndPartition, SequenceNumber, Int) => Unit] = None): EventHubsDirectDStream = {
-    new EventHubsDirectDStream(ssc, ehConf, EventHubsClient.apply, receiveTimeoutHandler)
+  def createDirectStream(ssc: StreamingContext, ehConf: EventHubsConf, eventHubsReceiverListener: Option[EventHubsReceiverListener] = None): EventHubsDirectDStream = {
+    new EventHubsDirectDStream(ssc, ehConf, EventHubsClient.apply, eventHubsReceiverListener)
   }
 
   /**

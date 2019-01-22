@@ -177,7 +177,8 @@ private[spark] class EventHubsDirectDStream private[spark] (_ssc: StreamingConte
           logInfo(s"Restoring EventHubsRDD for time $t ${b.mkString("[", ", ", "]")}")
           generatedRDDs += t -> new EventHubsRDD(context.sparkContext,
                                                  ehConf.trimmed,
-                                                 b.map(OffsetRange(_)))
+                                                 b.map(OffsetRange(_)),
+                                                 eventHubsReceiverListener)
       }
     }
   }

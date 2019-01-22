@@ -162,7 +162,9 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     }
   }
 
-  private def receive(requestSeqNo: SequenceNumber, batchSize: Int, eventHubsReceiverListener: Option[EventHubsReceiverListener]): Iterator[EventData] = {
+  private def receive(requestSeqNo: SequenceNumber,
+                      batchSize: Int,
+                      eventHubsReceiverListener: Option[EventHubsReceiverListener]): Iterator[EventData] = {
     val retryCount = ehConf.receiveRetryTimes.getOrElse(DefaultReceiveRetryTimes)
     var retried = 0
     var finalResult: Option[Iterator[EventData]] = None

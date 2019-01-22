@@ -160,6 +160,7 @@ final class EventHubsConf private (private val connectionStr: String)
       "eventhubs.receiverTimeout",
       "eventhubs.operationTimeout",
       "eventhubs.prefetchCount",
+      "eventhubs.threadPoolSize",
       "useSimulatedClient"
     ).map(_.toLowerCase).toSet
 
@@ -406,6 +407,22 @@ final class EventHubsConf private (private val connectionStr: String)
   }
 
   /**
+   * Set the size of thread pool.
+   * Default: [[DefaultThreadPoolSize]]
+   *
+   * @param size the size of thread pool
+   * @return the updated [[EventHubsConf]] instance
+   */
+  def setThreadPoolSize(size: Int): EventHubsConf = {
+    set(ThreadPoolSizeKey, size)
+  }
+
+  /** The current thread pool size.  */
+  def threadPoolSize: Option[Int] = {
+    self.get(ThreadPoolSizeKey) map (str => str.toInt)
+  }
+
+  /**
    * Rate limit on maximum number of events processed per trigger interval.
    * Only valid for Structured Streaming. The specified total number of events
    * will be proportionally split across partitions of different volume.
@@ -464,6 +481,7 @@ object EventHubsConf extends Logging {
   val OperationTimeoutKey = "eventhubs.operationTimeout"
   val ReceiveRetryTimes = "eventhubs.receiveRetryTimes"
   val PrefetchCountKey = "eventhubs.prefetchCount"
+  val ThreadPoolSizeKey = "eventhubs.threadPoolSize"
   val MaxEventsPerTriggerKey = "maxEventsPerTrigger"
   val UseSimulatedClientKey = "useSimulatedClient"
 

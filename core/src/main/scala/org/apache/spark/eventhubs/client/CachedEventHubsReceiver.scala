@@ -30,7 +30,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Await, Future, duration}
+import scala.concurrent.{Await, Awaitable, Future, duration}
 
 private[spark] trait CachedReceiver {
   private[eventhubs] def receive(ehConf: EventHubsConf,
@@ -60,6 +60,8 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
                                                        nAndP: NameAndPartition,
                                                        startSeqNo: SequenceNumber)
     extends Logging {
+
+  type AwaitTimeoutException = java.util.concurrent.TimeoutException
 
   import org.apache.spark.eventhubs._
 
@@ -121,9 +123,9 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       receiver = createReceiver(requestSeqNo)
     }
 
-    val event = Await.result(
+    val event = awaitReceiveMessage(
       receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor initial"),
-      ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout) match { case timeout => FiniteDuration(timeout.toMillis, duration.MILLISECONDS) })
+      requestSeqNo)
     val receivedSeqNo = event.head.getSystemProperties.getSequenceNumber
 
     if (receivedSeqNo != requestSeqNo) {
@@ -133,23 +135,31 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       // 2) Your desired event has expired from the service.
       // First, we'll check for case (1).
       logInfo(
-        s"checkCursor. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, receivedSeqNo: $lastReceivedSeqNo")
+        s"checkCursor. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, receivedSeqNo: $receivedSeqNo")
       receiver = createReceiver(requestSeqNo)
-      val movedEvent = Await.result(
+      val movedEvent = awaitReceiveMessage(
         receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor move"),
-        ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout) match { case timeout => FiniteDuration(timeout.toMillis, duration.MILLISECONDS) })
+        requestSeqNo)
       val movedSeqNo = movedEvent.head.getSystemProperties.getSequenceNumber
       if (movedSeqNo != requestSeqNo) {
         // The event still isn't present. It must be (2).
         val info = Await.result(
           retryJava(client.getPartitionRuntimeInformation(nAndP.partitionId.toString),
-            "partitionRuntime"),
-          ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout) match { case timeout => FiniteDuration(timeout.toMillis, duration.MILLISECONDS) })
-        val consumerGroup = ehConf.consumerGroup.getOrElse(DefaultConsumerGroup)
-        throw new IllegalStateException(
-          s"In partition ${info.getPartitionId} of ${info.getEventHubPath}, with consumer group $consumerGroup, " +
-            s"request seqNo $requestSeqNo is less than the received seqNo $receivedSeqNo. The earliest seqNo is " +
-            s"${info.getBeginSequenceNumber} and the last seqNo is ${info.getLastEnqueuedSequenceNumber}")
+                    "partitionRuntime"),
+          ehConf.internalOperationTimeout)
+
+        if (requestSeqNo < info.getBeginSequenceNumber &&
+            movedSeqNo == info.getBeginSequenceNumber) {
+          Future {
+            movedEvent
+          }
+        } else {
+          val consumerGroup = ehConf.consumerGroup.getOrElse(DefaultConsumerGroup)
+          throw new IllegalStateException(
+            s"In partition ${info.getPartitionId} of ${info.getEventHubPath}, with consumer group $consumerGroup, " +
+              s"request seqNo $requestSeqNo is less than the received seqNo $receivedSeqNo. The earliest seqNo is " +
+              s"${info.getBeginSequenceNumber} and the last seqNo is ${info.getLastEnqueuedSequenceNumber}")
+        }
       } else {
         Future {
           movedEvent
@@ -171,22 +181,30 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     while (retried < retryCount && finalResult.isEmpty) {
       retried += 1
       Try {
+        val start = System.currentTimeMillis()
         // Retrieve the events. First, we get the first event in the batch.
         // Then, if the succeeds, we collect the rest of the data.
-        val start = System.currentTimeMillis()
-        val first = Await.result(checkCursor(requestSeqNo), ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout) match { case timeout => FiniteDuration(timeout.toMillis, duration.MILLISECONDS) })
-        val theRest = for {i <- 1 until batchSize} yield
-          Await.result(receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout),
+        val first = Await.result(checkCursor(requestSeqNo), ehConf.internalOperationTimeout)
+        val firstSeqNo = first.head.getSystemProperties.getSequenceNumber
+        val newBatchSize = (requestSeqNo + batchSize - firstSeqNo).toInt
+
+        if (newBatchSize <= 0) {
+          return Iterator.empty
+        }
+
+        val theRest = for {i <- 1 until newBatchSize} yield
+          awaitReceiveMessage(receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout),
             s"receive; $nAndP; seqNo: ${requestSeqNo + i}"),
-            ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout) match { case timeout => FiniteDuration(timeout.toMillis, duration.MILLISECONDS) })
+            requestSeqNo)
         // Combine and sort the data.
         val combined = first ++ theRest.flatten
         val sorted = combined.toSeq
           .sortWith((e1, e2) =>
             e1.getSystemProperties.getSequenceNumber < e2.getSystemProperties.getSequenceNumber)
           .iterator
+
         val (result, validate) = sorted.duplicate
-        assert(validate.size == batchSize)
+        assert(validate.size == newBatchSize)
         finalResult = Some(result)
         eventHubsReceiverListener.foreach(listener => {
           listener.onBatchReceiveSuccess(nAndP, System.currentTimeMillis() - start, batchSize)
@@ -211,6 +229,16 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       })
       Seq.empty[EventData].iterator
     })
+  }
+
+  private def awaitReceiveMessage[T](awaitable: Awaitable[T], requestSeqNo: SequenceNumber): T = {
+    try {
+      Await.result(awaitable, ehConf.internalOperationTimeout)
+    } catch {
+      case e: AwaitTimeoutException =>
+        receiver = createReceiver(requestSeqNo)
+        throw e
+    }
   }
 }
 

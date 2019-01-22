@@ -97,7 +97,7 @@ private[spark] class EventHubsDirectDStream private[spark] (_ssc: StreamingConte
   }
 
   protected def clamp(
-                       latestSeqNos: Map[PartitionId, SequenceNumber]): Map[PartitionId, SequenceNumber] = {
+      latestSeqNos: Map[PartitionId, SequenceNumber]): Map[PartitionId, SequenceNumber] = {
     (for {
       (partitionId, latestSeqNo) <- latestSeqNos
       nAndP = NameAndPartition(ehConf.name, partitionId)
@@ -133,7 +133,7 @@ private[spark] class EventHubsDirectDStream private[spark] (_ssc: StreamingConte
     val rdd = new EventHubsRDD(context.sparkContext, ehConf.trimmed, offsetRanges, eventHubsReceiverListener)
 
     val description = offsetRanges.map(_.toString).mkString("\n")
-    logInfo(s"Starting batch at $validTime for EH: $ehName with\n $description")
+    logInfo(s"Starting batch at $validTime for EH: $ehName with\n$description")
 
     val metadata =
       Map("seqNos" -> offsetRanges, StreamInputInfo.METADATA_KEY_DESCRIPTION -> description)
@@ -145,7 +145,7 @@ private[spark] class EventHubsDirectDStream private[spark] (_ssc: StreamingConte
   }
 
   override def start(): Unit = {
-    EventHubsClient.userAgent = s"Spark-Streaming-${ssc.sc.version}"
+    EventHubsClient.userAgent = s"Spark-Streaming-$SparkConnectorVersion-${ssc.sc.version}"
   }
 
   override def stop(): Unit = {

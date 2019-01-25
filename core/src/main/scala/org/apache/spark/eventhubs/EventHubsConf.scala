@@ -339,6 +339,20 @@ final class EventHubsConf private (private val connectionStr: String)
     if (m.isEmpty) None else Some(m.map { case (k, v) => NameAndPartition.fromString(k) -> v })
   }
 
+
+  def setEventHubsReceiverListenerParameters(parameters: Seq[String]): EventHubsConf = {
+    set(EventHubsReceiverListenerParametersKey, parameters.mkString(","))
+  }
+
+  def eventHubsReceiverListenerParameters: Option[Seq[String]] = self.get(EventHubsReceiverListenerParametersKey).map(_.split(",").toSeq)
+
+  def setEventHubsReceiverListenerClass(className: String): EventHubsConf = {
+    set(EventHubsReceiverListenerClassKey, className)
+  }
+
+  def eventHubsReceiverListenerClass: Option[String] = {
+    self.get(EventHubsReceiverListenerClassKey)
+  }
   /**
    * Set the receiver timeout. We will try to receive the expected batch for
    * the length of this timeout.

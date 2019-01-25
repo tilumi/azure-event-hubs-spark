@@ -293,11 +293,9 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
   }
 
   private def getEventHubsReceiverListener: Option[EventHubsReceiverListener] = {
-    parameters.get(EventHubsReceiverListenerClassKey).map(
+    ehConf.eventHubsReceiverListenerClass.map(
       className => {
-        val params = parameters.get(EventHubsReceiverListenerParametersKey).
-          map(parameters =>
-            Lists.newArrayList(Splitter.on(",").trimResults().split(parameters)).asScala).
+        val params = ehConf.eventHubsReceiverListenerParameters.
           getOrElse(Seq.empty[String])
         Class.forName(className).
           getConstructor(params.map(_ => classOf[String]): _*).

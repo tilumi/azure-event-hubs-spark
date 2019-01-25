@@ -20,20 +20,20 @@ package org.apache.spark.sql.eventhubs
 import java.io._
 import java.nio.charset.StandardCharsets
 
+import com.google.common.base.Splitter
+import com.google.common.collect.Lists
 import org.apache.commons.io.IOUtils
 import org.apache.spark.SparkContext
-import org.apache.spark.eventhubs.rdd.{ EventHubsRDD, OffsetRange }
-import org.apache.spark.eventhubs.{ EventHubsConf, NameAndPartition, _ }
+import org.apache.spark.eventhubs.rdd.{EventHubsRDD, OffsetRange}
+import org.apache.spark.eventhubs.utils.EventHubsReceiverListener
+import org.apache.spark.eventhubs.{EventHubsConf, NameAndPartition, _}
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.ExecutorCacheTaskLocation
-import org.apache.spark.sql.execution.streaming.{
-  HDFSMetadataLog,
-  Offset,
-  SerializedOffset,
-  Source
-}
+import org.apache.spark.sql.execution.streaming.{HDFSMetadataLog, Offset, SerializedOffset, Source}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{ DataFrame, SQLContext }
+import org.apache.spark.sql.{DataFrame, SQLContext}
+
+import collection.JavaConverters._
 
 /**
  * A [[Source]] that reads data from Event Hubs.
@@ -278,13 +278,32 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
         true
       }
     }.toArray
-
+    val eventHubsReceiverListener: Option[EventHubsReceiverListener] = getEventHubsReceiverListener
+    if(eventHubsReceiverListener.nonEmpty) {
+      logInfo(s"Got EventHubsReceiverListener: ${eventHubsReceiverListener.get}")
+    }
     val rdd =
-      EventHubsSourceProvider.toInternalRow(new EventHubsRDD(sc, ehConf.trimmed, offsetRanges))
+      EventHubsSourceProvider.toInternalRow(
+        new EventHubsRDD(sc, ehConf.trimmed, offsetRanges, eventHubsReceiverListener)
+      )
     logInfo(
       "GetBatch generating RDD of offset range: " +
         offsetRanges.sortBy(_.nameAndPartition.toString).mkString(", "))
     sqlContext.internalCreateDataFrame(rdd, schema)
+  }
+
+  private def getEventHubsReceiverListener: Option[EventHubsReceiverListener] = {
+    parameters.get(EventHubsReceiverListenerClassKey).map(
+      className => {
+        val params = parameters.get(EventHubsReceiverListenerParametersKey).
+          map(parameters =>
+            Lists.newArrayList(Splitter.on(",").trimResults().split(parameters)).asScala).
+          getOrElse(Seq.empty[String])
+        Class.forName(className).
+          getConstructor(params.map(_ => classOf[String]): _*).
+          newInstance(params: _*).asInstanceOf[EventHubsReceiverListener]
+      }
+    )
   }
 
   /**

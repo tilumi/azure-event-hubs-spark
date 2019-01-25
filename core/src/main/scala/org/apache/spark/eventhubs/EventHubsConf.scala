@@ -484,6 +484,8 @@ object EventHubsConf extends Logging {
   val ThreadPoolSizeKey = "eventhubs.threadPoolSize"
   val MaxEventsPerTriggerKey = "maxEventsPerTrigger"
   val UseSimulatedClientKey = "useSimulatedClient"
+  val EventHubsReceiverListenerClassKey = "eventhubs.EventHubsReceiverListenerClass"
+  val EventHubsReceiverListenerParametersKey = "eventhubs.EventHubsReceiverListenerParameters"
 
   /** Creates an EventHubsConf */
   def apply(connectionString: String) = new EventHubsConf(connectionString)

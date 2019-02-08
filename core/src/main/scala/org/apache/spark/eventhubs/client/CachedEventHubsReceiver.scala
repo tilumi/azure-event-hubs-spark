@@ -120,6 +120,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     if (lastReceivedSeqNo > -1 && lastReceivedSeqNo + 1 != requestSeqNo) {
       logInfo(
         s"checkCursor. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, lastReceivedSeqNo: $lastReceivedSeqNo")
+      closeReceiver()
       receiver = createReceiver(requestSeqNo)
     }
 
@@ -136,6 +137,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       // First, we'll check for case (1).
       logInfo(
         s"checkCursor. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, receivedSeqNo: $receivedSeqNo")
+      closeReceiver()
       receiver = createReceiver(requestSeqNo)
       val movedEvent = awaitReceiveMessage(
         receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor move"),
@@ -168,6 +170,15 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     } else {
       Future {
         event
+      }
+    }
+  }
+
+  private def closeReceiver(): Unit = {
+    if (receiver != null) {
+      Try(Await.ready(receiver.map(_.closeSync()), ehConf.internalOperationTimeout)) match {
+        case Success(_) => logInfo("Receiver close succeed")
+        case Failure(exception) => logWarning(s"Receiver close failed: ${exception.getMessage}")
       }
     }
   }
@@ -215,6 +226,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           logWarning("Receive failure", exception)
           logInfo(
             s"Receive failure. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo")
+          closeReceiver()
           receiver = createReceiver(requestSeqNo)
       }
     }
@@ -236,6 +248,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       Await.result(awaitable, ehConf.internalOperationTimeout)
     } catch {
       case e: AwaitTimeoutException =>
+        closeReceiver()
         receiver = createReceiver(requestSeqNo)
         throw e
     }

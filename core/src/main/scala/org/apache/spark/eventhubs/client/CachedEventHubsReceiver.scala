@@ -218,7 +218,8 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         assert(validate.size == newBatchSize)
         finalResult = Some(result)
         eventHubsReceiverListener.foreach(listener => {
-          listener.onBatchReceiveSuccess(nAndP, System.currentTimeMillis() - start, batchSize)
+          val receivedBytes = result.map(_.getBytes.size.toLong).sum
+          listener.onBatchReceiveSuccess(nAndP, System.currentTimeMillis() - start, batchSize, receivedBytes)
         })
       } match {
         case Success(_) =>

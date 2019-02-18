@@ -217,16 +217,16 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           .sortWith((e1, e2) =>
             e1.getSystemProperties.getSequenceNumber < e2.getSystemProperties.getSequenceNumber)
           .iterator
-
         val (result, validate) = sorted.duplicate
-        assert(validate.size == newBatchSize)
         finalResult = Some(result)
         eventHubsReceiverListener.foreach(listener => {
-          val receivedBytes = result.map(_.getBytes.size.toLong).sum
+          val receivedBytes = validate.map(_.getBytes.size.toLong).sum
           listener.onBatchReceiveSuccess(nAndP, System.currentTimeMillis() - start, batchSize, receivedBytes)
         })
+        newBatchSize
       } match {
-        case Success(_) =>
+        case Success(receivedSize) =>
+          logInfo(s"Receive succeed, received $receivedSize messages")
         case Failure(exception) =>
           logWarning("Receive failure", exception)
           logInfo(

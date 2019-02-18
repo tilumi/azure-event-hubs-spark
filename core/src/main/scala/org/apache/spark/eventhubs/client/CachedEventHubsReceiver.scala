@@ -204,12 +204,13 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         if (newBatchSize <= 0) {
           return Iterator.empty
         }
-        val theRest = (1 until newBatchSize).grouped(500).flatMap(group => {
-            val received = awaitReceiveMessage(receive(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), group.size,
-              s"receive; $nAndP; seqNo: [${requestSeqNo + group.head}, ${requestSeqNo + group.last}]"))
-            logInfo(s"Expect 500 messages, Received: $received messages")
-            received
-        })
+
+        var theRest = Seq.empty[EventData]
+        while(theRest.size < newBatchSize - 1) {
+          theRest = theRest ++ awaitReceiveMessage(
+            receive(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), Math.min(500, newBatchSize - 1 - theRest.size), s"receive; $nAndP"))
+        }
+        theRest = theRest.take(newBatchSize - 1)
         // Combine and sort the data.
         val combined = first ++ theRest
         val sorted = combined.toSeq

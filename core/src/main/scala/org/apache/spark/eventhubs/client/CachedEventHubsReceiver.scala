@@ -101,10 +101,14 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
   }
 
   private def receiveOne(timeout: Duration, msg: String): Future[Iterable[EventData]] = {
+    receive(timeout, 1, msg)
+  }
+
+  private def receive(timeout: Duration, maxEventCount: Int, msg: String): Future[Iterable[EventData]] = {
     receiver
       .flatMap { r =>
         r.setReceiveTimeout(timeout)
-        retryNotNull(r.receive(1), msg)
+        retryNotNull(r.receive(maxEventCount), msg)
       }
       .map {
         _.asScala
@@ -125,8 +129,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     }
 
     val event = awaitReceiveMessage(
-      receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor initial"),
-      requestSeqNo)
+      receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor initial"))
     val receivedSeqNo = event.head.getSystemProperties.getSequenceNumber
 
     if (receivedSeqNo != requestSeqNo) {
@@ -140,8 +143,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       closeReceiver()
       receiver = createReceiver(requestSeqNo)
       val movedEvent = awaitReceiveMessage(
-        receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor move"),
-        requestSeqNo)
+        receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor move"))
       val movedSeqNo = movedEvent.head.getSystemProperties.getSequenceNumber
       if (movedSeqNo != requestSeqNo) {
         // The event still isn't present. It must be (2).
@@ -202,13 +204,12 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         if (newBatchSize <= 0) {
           return Iterator.empty
         }
-
-        val theRest = for {i <- 1 until newBatchSize} yield
-          awaitReceiveMessage(receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout),
-            s"receive; $nAndP; seqNo: ${requestSeqNo + i}"),
-            requestSeqNo)
+        val theRest = (1 until newBatchSize).grouped(500).flatMap(group => {
+            awaitReceiveMessage(receive(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), group.size,
+              s"receive; $nAndP; seqNo: [${requestSeqNo + group.head}, ${requestSeqNo + group.last}]"))
+        })
         // Combine and sort the data.
-        val combined = first ++ theRest.flatten
+        val combined = first ++ theRest
         val sorted = combined.toSeq
           .sortWith((e1, e2) =>
             e1.getSystemProperties.getSequenceNumber < e2.getSystemProperties.getSequenceNumber)
@@ -244,13 +245,11 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     })
   }
 
-  private def awaitReceiveMessage[T](awaitable: Awaitable[T], requestSeqNo: SequenceNumber): T = {
+  private def awaitReceiveMessage[T](awaitable: Awaitable[T]): T = {
     try {
       Await.result(awaitable, ehConf.internalOperationTimeout)
     } catch {
       case e: AwaitTimeoutException =>
-        closeReceiver()
-        receiver = createReceiver(requestSeqNo)
         throw e
     }
   }

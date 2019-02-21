@@ -22,18 +22,14 @@ import java.nio.charset.StandardCharsets
 
 import org.apache.commons.io.IOUtils
 import org.apache.spark.SparkContext
-import org.apache.spark.eventhubs.rdd.{ EventHubsRDD, OffsetRange }
-import org.apache.spark.eventhubs.{ EventHubsConf, NameAndPartition, _ }
+import org.apache.spark.eventhubs.rdd.{EventHubsRDD, OffsetRange}
+import org.apache.spark.eventhubs.utils.EventHubsReceiverListener
+import org.apache.spark.eventhubs.{EventHubsConf, NameAndPartition, _}
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.ExecutorCacheTaskLocation
-import org.apache.spark.sql.execution.streaming.{
-  HDFSMetadataLog,
-  Offset,
-  SerializedOffset,
-  Source
-}
+import org.apache.spark.sql.execution.streaming.{HDFSMetadataLog, Offset, SerializedOffset, Source}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{ DataFrame, SQLContext }
+import org.apache.spark.sql.{DataFrame, SQLContext}
 
 /**
  * A [[Source]] that reads data from Event Hubs.
@@ -278,9 +274,18 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
         true
       }
     }.toArray
-
+    val listenerOption = ehConf.listenerClass().map{
+      listenerClass =>
+        val arguments = ehConf.listenerArguments().get
+        Class.forName(listenerClass).
+          getConstructor(
+            Array.fill(arguments.length)(classOf[String]): _*
+          ).newInstance(arguments: _*).
+          asInstanceOf[EventHubsReceiverListener]
+    }
     val rdd =
-      EventHubsSourceProvider.toInternalRow(new EventHubsRDD(sc, ehConf.trimmed, offsetRanges))
+      EventHubsSourceProvider.toInternalRow(
+        new EventHubsRDD(sc, ehConf.trimmed, offsetRanges, listenerOption))
     logInfo(
       "GetBatch generating RDD of offset range: " +
         offsetRanges.sortBy(_.nameAndPartition.toString).mkString(", "))

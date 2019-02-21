@@ -200,6 +200,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         val first = Await.result(checkCursor(requestSeqNo), ehConf.internalOperationTimeout)
         val firstSeqNo = first.head.getSystemProperties.getSequenceNumber
         val newBatchSize = (requestSeqNo + batchSize - firstSeqNo).toInt
+        eventHubsReceiverListener.foreach(_.onReceiveFirstEvent(first.head))
 
         if (newBatchSize <= 0) {
           return Iterator.empty
@@ -208,7 +209,8 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         var theRest = Seq.empty[EventData]
         while(theRest.size < newBatchSize - 1) {
           theRest = theRest ++ awaitReceiveMessage(
-            receive(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), Math.min(500, newBatchSize - 1 - theRest.size), s"receive; $nAndP"))
+            receive(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout),
+              Math.min(500, newBatchSize - 1 - theRest.size), s"receive; $nAndP"))
         }
         theRest = theRest.take(newBatchSize - 1)
         // Combine and sort the data.

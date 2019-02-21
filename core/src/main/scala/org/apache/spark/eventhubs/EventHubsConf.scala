@@ -22,13 +22,12 @@ import java.util.concurrent.ConcurrentHashMap
 
 import org.apache.spark.eventhubs.utils.CaseInsensitiveMap
 import org.apache.spark.internal.Logging
-import org.json4s.NoTypeHints
+import org.json4s.{DefaultFormats, NoTypeHints}
 import org.json4s.jackson.Serialization
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.language.implicitConversions
-
 /**
  * Configuration for your EventHubs instance when being used with Apache Spark.
  *
@@ -51,7 +50,6 @@ final class EventHubsConf private (private val connectionStr: String)
   self =>
 
   import EventHubsConf._
-
   private val settings = new ConcurrentHashMap[String, String]()
   this.setConnectionString(connectionStr)
 
@@ -434,6 +432,25 @@ final class EventHubsConf private (private val connectionStr: String)
     set(MaxEventsPerTriggerKey, limit)
   }
 
+  def setListenerClass(listenerClass: String): EventHubsConf = {
+    set(ListenerClassKey, listenerClass)
+  }
+
+  def listenerClass(): Option[String] = {
+    self.get(ListenerClassKey)
+  }
+
+  def setListenerArguments(listenerArguments: String): EventHubsConf = {
+    set(ListenerArgumentsKey, listenerArguments)
+  }
+
+  def listenerArguments(): Option[Seq[String]] = {
+    implicit val formats = DefaultFormats
+    self.get(ListenerArgumentsKey).map{
+      argumentsJson => Serialization.read[Seq[String]](argumentsJson)
+    }
+  }
+
   // The simulated client (and simulated eventhubs) will be used. These
   // can be found in EventHubsTestUtils.
   private[spark] def setUseSimulatedClient(b: Boolean): EventHubsConf = {
@@ -484,6 +501,8 @@ object EventHubsConf extends Logging {
   val ThreadPoolSizeKey = "eventhubs.threadPoolSize"
   val MaxEventsPerTriggerKey = "maxEventsPerTrigger"
   val UseSimulatedClientKey = "useSimulatedClient"
+  val ListenerClassKey = "eventhubs.listenerClass"
+  val ListenerArgumentsKey = "eventhubs.listenerArguments"
 
   /** Creates an EventHubsConf */
   def apply(connectionString: String) = new EventHubsConf(connectionString)

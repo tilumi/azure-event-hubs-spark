@@ -500,7 +500,7 @@ class EventHubsSourceSuite extends EventHubsSourceTest {
 
     val conf = getEventHubsConf(eh).
       setListenerClass(classOf[DummyListener].getName).
-      setListenerArguments(Serialization.write(Seq("arg1", "arg2")))
+      setListenerArguments(Seq("arg1", "arg2"))
 
     val reader = spark.readStream
       .format("eventhubs")

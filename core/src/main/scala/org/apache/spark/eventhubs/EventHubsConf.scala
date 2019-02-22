@@ -28,6 +28,7 @@ import org.json4s.jackson.Serialization
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.language.implicitConversions
+import scala.util.Try
 /**
  * Configuration for your EventHubs instance when being used with Apache Spark.
  *
@@ -440,12 +441,18 @@ final class EventHubsConf private (private val connectionStr: String)
     self.get(ListenerClassKey)
   }
 
-  def setListenerArguments(listenerArguments: String): EventHubsConf = {
-    set(ListenerArgumentsKey, listenerArguments)
+  def setListenerArguments(listenerArguments: Seq[String]): EventHubsConf = {
+    require(listenerClass().isDefined, s"$ListenerClassKey must be set")
+    require(
+      Try(Class.forName(listenerClass().get).getConstructor(Array.fill(listenerArguments.size)(classOf[String]): _*)).isSuccess,
+      s"constructor of ${listenerClass().get} with parameters ${listenerArguments.mkString(",")} not found!"
+    )
+    implicit val formats: DefaultFormats.type = DefaultFormats
+    set(ListenerArgumentsKey, Serialization.write(listenerArguments))
   }
 
   def listenerArguments(): Option[Seq[String]] = {
-    implicit val formats = DefaultFormats
+    implicit val formats: DefaultFormats.type = DefaultFormats
     self.get(ListenerArgumentsKey).map{
       argumentsJson => Serialization.read[Seq[String]](argumentsJson)
     }

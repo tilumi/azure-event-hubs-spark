@@ -274,18 +274,9 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
         true
       }
     }.toArray
-    val listenerOption = ehConf.listenerClass().map{
-      listenerClass =>
-        val arguments = ehConf.listenerArguments().get
-        Class.forName(listenerClass).
-          getConstructor(
-            Array.fill(arguments.length)(classOf[String]): _*
-          ).newInstance(arguments: _*).
-          asInstanceOf[EventHubsReceiverListener]
-    }
     val rdd =
       EventHubsSourceProvider.toInternalRow(
-        new EventHubsRDD(sc, ehConf.trimmed, offsetRanges, listenerOption))
+        new EventHubsRDD(sc, ehConf.trimmed, offsetRanges, ehConf.listener()))
     logInfo(
       "GetBatch generating RDD of offset range: " +
         offsetRanges.sortBy(_.nameAndPartition.toString).mkString(", "))

@@ -20,7 +20,7 @@ package org.apache.spark.eventhubs
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 
-import org.apache.spark.eventhubs.utils.CaseInsensitiveMap
+import org.apache.spark.eventhubs.utils.{CaseInsensitiveMap, EventHubsReceiverListener}
 import org.apache.spark.internal.Logging
 import org.json4s.{DefaultFormats, NoTypeHints}
 import org.json4s.jackson.Serialization
@@ -433,30 +433,31 @@ final class EventHubsConf private (private val connectionStr: String)
     set(MaxEventsPerTriggerKey, limit)
   }
 
-  def setListenerClass(listenerClass: String): EventHubsConf = {
-    set(ListenerClassKey, listenerClass)
-  }
-
-  def listenerClass(): Option[String] = {
-    self.get(ListenerClassKey)
-  }
-
-  def setListenerArguments(listenerArguments: Seq[String]): EventHubsConf = {
-    require(listenerClass().isDefined, s"$ListenerClassKey must be set")
+  def setListener(listener: EventHubsReceiverListener): EventHubsConf = {
+    set(ListenerClassKey, listener.getClass.getName)
+    val parameters = listener.getConstructorParameters
+    require(self.get(ListenerClassKey).isDefined, s"$ListenerClassKey must be set")
     require(
-      Try(Class.forName(listenerClass().get).getConstructor(Array.fill(listenerArguments.size)(classOf[String]): _*)).isSuccess,
-      s"constructor of ${listenerClass().get} with parameters ${listenerArguments.mkString(",")} not found!"
+      Try(Class.forName(self.get(ListenerClassKey).get).getConstructor(Array.fill(parameters.size)(classOf[String]): _*)).isSuccess,
+      s"constructor of ${self.get(ListenerClassKey).get} with parameters ${parameters.mkString(",")} not found!"
     )
     implicit val formats: DefaultFormats.type = DefaultFormats
-    set(ListenerArgumentsKey, Serialization.write(listenerArguments))
+    set(ListenerArgumentsKey, Serialization.write(parameters))
   }
 
-  def listenerArguments(): Option[Seq[String]] = {
+  def listener(): Option[EventHubsReceiverListener] = {
     implicit val formats: DefaultFormats.type = DefaultFormats
-    self.get(ListenerArgumentsKey).map{
-      argumentsJson => Serialization.read[Seq[String]](argumentsJson)
+    self.get(ListenerClassKey).map{
+      listenerClass =>
+        val arguments = Serialization.read[Seq[String]](self.get(ListenerArgumentsKey).get)
+        Class.forName(listenerClass).
+          getConstructor(
+            Array.fill(arguments.length)(classOf[String]): _*
+          ).newInstance(arguments: _*).
+          asInstanceOf[EventHubsReceiverListener]
     }
   }
+
 
   // The simulated client (and simulated eventhubs) will be used. These
   // can be found in EventHubsTestUtils.

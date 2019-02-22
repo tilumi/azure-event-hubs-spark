@@ -109,6 +109,8 @@ class DummyListener(arg1: String, arg2: String) extends EventHubsReceiverListene
   override def onBatchReceiveSkip(nAndP: NameAndPartition, requestSeqNo: SequenceNumber, batchSize: Int): Unit = ???
 
   override def onReceiveFirstEvent(firstEvent: EventData): Unit = ???
+
+  override def getConstructorParameters: Seq[String] = Seq(arg1, arg2)
 }
 
 class EventHubsSourceSuite extends EventHubsSourceTest {
@@ -497,10 +499,8 @@ class EventHubsSourceSuite extends EventHubsSourceTest {
     val eh = newEventHubs()
     val eventHub = testUtils.createEventHubs(eh, DefaultPartitionCount)
     testUtils.populateUniformly(eh, 5000)
-
-    val conf = getEventHubsConf(eh).
-      setListenerClass(classOf[DummyListener].getName).
-      setListenerArguments(Seq("arg1", "arg2"))
+    val dummyListener = new DummyListener("arg1", "arg2")
+    val conf = getEventHubsConf(eh).setListener(dummyListener)
 
     val reader = spark.readStream
       .format("eventhubs")

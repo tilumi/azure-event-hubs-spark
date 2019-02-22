@@ -163,7 +163,11 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     }
 
     currentSeqNos = Some(seqNos)
-    logDebug(s"GetOffset: ${seqNos.toSeq.map(_.toString).sorted}")
+    logDebug(s"GetOffset: ${seqNos.map {
+      case (nameAndPartition: NameAndPartition, sequenceNumber: SequenceNumber) =>
+        nameAndPartition -> (sequenceNumber, earliestAndLatest(nameAndPartition.partitionId))
+      }.toSeq.map(_.toString).sorted
+    }")
 
     Some(EventHubsSourceOffset(seqNos))
   }

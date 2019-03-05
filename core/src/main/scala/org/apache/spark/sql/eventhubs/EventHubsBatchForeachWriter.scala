@@ -91,9 +91,9 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
         ehConf.senderListener().foreach(_.onWriterClose(
           totalMessageCount,
           totalMessageSizeInBytes,
-          totalRetryTimes,
           System.nanoTime() - writerOpenTime,
-          totalBatches)
+          Some(totalRetryTimes),
+          Some(totalBatches))
         )
         ClientConnectionPool.returnClient(ehConf, client)
     }
@@ -101,18 +101,20 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
 
   private def sendBatch(currentEventDataBatch: EventDataBatch, messageSizeInCurrentBatchInBytes: Int) = {
     val start = System.nanoTime()
-    retryJava(client.send(currentEventDataBatch), "ForeachWriter").andThen {
-      case Success((_, retryTimes)) =>
-        val sendElapsedTimeInNanos = System.nanoTime() - start
-        ehConf.senderListener().foreach(_.onBatchSendSuccess(
-          currentEventDataBatch.getSize,
-          messageSizeInCurrentBatchInBytes,
-          sendElapsedTimeInNanos,
-          retryTimes
-        ))
-        totalRetryTimes += retryTimes
-      case Failure(exception) =>
-        ehConf.senderListener().foreach(_.onBatchSendFail(exception))
+    if(currentEventDataBatch.getSize > 0) {
+      retryJava(client.send(currentEventDataBatch), "ForeachWriter").andThen {
+        case Success((_, retryTimes)) =>
+          val sendElapsedTimeInNanos = System.nanoTime() - start
+          ehConf.senderListener().foreach(_.onBatchSendSuccess(
+            currentEventDataBatch.getSize,
+            messageSizeInCurrentBatchInBytes,
+            sendElapsedTimeInNanos,
+            retryTimes
+          ))
+          totalRetryTimes += retryTimes
+        case Failure(exception) =>
+          ehConf.senderListener().foreach(_.onBatchSendFail(exception))
+      }
     }
   }
 }

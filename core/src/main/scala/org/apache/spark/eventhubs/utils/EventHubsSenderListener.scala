@@ -12,9 +12,9 @@ trait EventHubsSenderListener extends Serializable {
 
   def onWriterClose(totalMessageCount: Int,
                     totalMessageSizeInBytes: Int,
-                    totalRetryTimes: Int,
                     endToEndElapsedTimeInNanos: Long,
-                    totalBatches: Int)
+                    totalRetryTimes: Option[Int],
+                    totalBatches: Option[Int])
 
   def getConstructorParameters: Seq[String]
 

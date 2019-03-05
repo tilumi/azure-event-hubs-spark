@@ -51,6 +51,7 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
     writerOpenTime = System.nanoTime()
     client = ClientConnectionPool.borrowClient(ehConf)
     eventDataBatch = client.createBatch()
+    ehConf.listener().foreach(_.onWriterOpen(partitionId, version))
     true
   }
 

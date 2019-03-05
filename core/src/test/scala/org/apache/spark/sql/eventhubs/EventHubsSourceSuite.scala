@@ -21,7 +21,7 @@ import java.io.{BufferedWriter, FileInputStream, OutputStream, OutputStreamWrite
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.microsoft.azure.eventhubs.EventData
+import com.microsoft.azure.eventhubs.{EventData, EventDataBatch}
 import org.apache.qpid.proton.amqp.{Binary, Decimal128, Decimal32, Decimal64, DescribedType, Symbol, UnknownDescribedType, UnsignedByte, UnsignedInteger, UnsignedLong, UnsignedShort}
 import org.apache.spark.eventhubs.utils.{EventHubsReceiverListener, EventHubsTestUtils, SimulatedClient}
 import org.apache.spark.eventhubs.{EventHubsConf, EventPosition, NameAndPartition, SequenceNumber}
@@ -111,6 +111,14 @@ class DummyListener(arg1: String, arg2: String) extends EventHubsReceiverListene
   override def onReceiveFirstEvent(firstEvent: EventData): Unit = ???
 
   override def getConstructorParameters: Seq[String] = Seq(arg1, arg2)
+
+  override def onBatchSendSuccess(eventDataBatch: EventDataBatch, sendElapsedTimeInNanos: SequenceNumber, retryCount: Int): Unit = ???
+
+  override def onBatchSendFail(exception: Throwable): Unit = ???
+
+  override def onWriterClose(totalMessageCount: Int, totalMessageSizeInBytes: Int, endToEndElapsedTimeInNanos: SequenceNumber): Unit = ???
+
+  override def onWriterOpen(): Unit = ???
 }
 
 class EventHubsSourceSuite extends EventHubsSourceTest {

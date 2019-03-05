@@ -17,6 +17,8 @@ trait EventHubsReceiverListener extends Serializable {
 
   def onBatchSendFail(exception: Throwable)
 
+  def onWriterOpen(partitionId: Long, version: Long)
+
   def onWriterClose(totalMessageCount: Int, totalMessageSizeInBytes: Int, endToEndElapsedTimeInNanos: Long)
 
 }

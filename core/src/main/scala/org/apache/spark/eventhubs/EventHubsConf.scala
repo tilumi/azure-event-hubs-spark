@@ -20,7 +20,7 @@ package org.apache.spark.eventhubs
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 
-import org.apache.spark.eventhubs.utils.{CaseInsensitiveMap, EventHubsReceiverListener}
+import org.apache.spark.eventhubs.utils.{CaseInsensitiveMap, EventHubsReceiverListener, EventHubsSenderListener}
 import org.apache.spark.internal.Logging
 import org.json4s.{DefaultFormats, NoTypeHints}
 import org.json4s.jackson.Serialization
@@ -433,28 +433,53 @@ final class EventHubsConf private (private val connectionStr: String)
     set(MaxEventsPerTriggerKey, limit)
   }
 
-  def setListener(listener: EventHubsReceiverListener): EventHubsConf = {
-    set(ListenerClassKey, listener.getClass.getName)
+  def setReceiverListener(listener: EventHubsReceiverListener): EventHubsConf = {
+    set(ReceiverListenerClassKey, listener.getClass.getName)
     val parameters = listener.getConstructorParameters
-    require(self.get(ListenerClassKey).isDefined, s"$ListenerClassKey must be set")
+    require(self.get(ReceiverListenerClassKey).isDefined, s"$ReceiverListenerClassKey must be set")
     require(
-      Try(Class.forName(self.get(ListenerClassKey).get).getConstructor(Array.fill(parameters.size)(classOf[String]): _*)).isSuccess,
-      s"constructor of ${self.get(ListenerClassKey).get} with parameters ${parameters.mkString(",")} not found!"
+      Try(Class.forName(self.get(ReceiverListenerClassKey).get).getConstructor(Array.fill(parameters.size)(classOf[String]): _*)).isSuccess,
+      s"constructor of ${self.get(ReceiverListenerClassKey).get} with parameters ${parameters.mkString(",")} not found!"
     )
     implicit val formats: DefaultFormats.type = DefaultFormats
-    set(ListenerArgumentsKey, Serialization.write(parameters))
+    set(ReceiverListenerArgumentsKey, Serialization.write(parameters))
   }
 
-  def listener(): Option[EventHubsReceiverListener] = {
+  def receiverListener(): Option[EventHubsReceiverListener] = {
     implicit val formats: DefaultFormats.type = DefaultFormats
-    self.get(ListenerClassKey).map{
+    self.get(ReceiverListenerClassKey).map{
       listenerClass =>
-        val arguments = Serialization.read[Seq[String]](self.get(ListenerArgumentsKey).get)
+        val arguments = Serialization.read[Seq[String]](self.get(ReceiverListenerArgumentsKey).get)
         Class.forName(listenerClass).
           getConstructor(
             Array.fill(arguments.length)(classOf[String]): _*
           ).newInstance(arguments: _*).
           asInstanceOf[EventHubsReceiverListener]
+    }
+  }
+
+  def setSenderListener(listener: EventHubsSenderListener): EventHubsConf = {
+    set(SenderListenerClassKey, listener.getClass.getName)
+    val parameters = listener.getConstructorParameters
+    require(self.get(SenderListenerClassKey).isDefined, s"$SenderListenerClassKey must be set")
+    require(
+      Try(Class.forName(self.get(SenderListenerClassKey).get).getConstructor(Array.fill(parameters.size)(classOf[String]): _*)).isSuccess,
+      s"constructor of ${self.get(SenderListenerClassKey).get} with parameters ${parameters.mkString(",")} not found!"
+    )
+    implicit val formats: DefaultFormats.type = DefaultFormats
+    set(SenderListenerArgumentsKey, Serialization.write(parameters))
+  }
+
+  def senderListener(): Option[EventHubsSenderListener] = {
+    implicit val formats: DefaultFormats.type = DefaultFormats
+    self.get(SenderListenerClassKey).map{
+      listenerClass =>
+        val arguments = Serialization.read[Seq[String]](self.get(SenderListenerArgumentsKey).get)
+        Class.forName(listenerClass).
+          getConstructor(
+            Array.fill(arguments.length)(classOf[String]): _*
+          ).newInstance(arguments: _*).
+          asInstanceOf[EventHubsSenderListener]
     }
   }
 
@@ -509,8 +534,10 @@ object EventHubsConf extends Logging {
   val ThreadPoolSizeKey = "eventhubs.threadPoolSize"
   val MaxEventsPerTriggerKey = "maxEventsPerTrigger"
   val UseSimulatedClientKey = "useSimulatedClient"
-  val ListenerClassKey = "eventhubs.listenerClass"
-  val ListenerArgumentsKey = "eventhubs.listenerArguments"
+  val ReceiverListenerClassKey = "eventhubs.receiverListenerClass"
+  val ReceiverListenerArgumentsKey = "eventhubs.receiverListenerArguments"
+  val SenderListenerClassKey = "eventhubs.senderListenerClass"
+  val SenderListenerArgumentsKey = "eventhubs.senderListenerArguments"
 
   /** Creates an EventHubsConf */
   def apply(connectionString: String) = new EventHubsConf(connectionString)

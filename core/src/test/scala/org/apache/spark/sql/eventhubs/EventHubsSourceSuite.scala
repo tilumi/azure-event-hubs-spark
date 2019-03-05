@@ -111,14 +111,6 @@ class DummyListener(arg1: String, arg2: String) extends EventHubsReceiverListene
   override def onReceiveFirstEvent(firstEvent: EventData): Unit = ???
 
   override def getConstructorParameters: Seq[String] = Seq(arg1, arg2)
-
-  override def onBatchSendSuccess(eventDataBatch: EventDataBatch, sendElapsedTimeInNanos: SequenceNumber, retryCount: Int): Unit = ???
-
-  override def onBatchSendFail(exception: Throwable): Unit = ???
-
-  override def onWriterClose(totalMessageCount: Int, totalMessageSizeInBytes: Int, endToEndElapsedTimeInNanos: SequenceNumber): Unit = ???
-
-  override def onWriterOpen(): Unit = ???
 }
 
 class EventHubsSourceSuite extends EventHubsSourceTest {
@@ -508,7 +500,7 @@ class EventHubsSourceSuite extends EventHubsSourceTest {
     val eventHub = testUtils.createEventHubs(eh, DefaultPartitionCount)
     testUtils.populateUniformly(eh, 5000)
     val dummyListener = new DummyListener("arg1", "arg2")
-    val conf = getEventHubsConf(eh).setListener(dummyListener)
+    val conf = getEventHubsConf(eh).setReceiverListener(dummyListener)
 
     val reader = spark.readStream
       .format("eventhubs")

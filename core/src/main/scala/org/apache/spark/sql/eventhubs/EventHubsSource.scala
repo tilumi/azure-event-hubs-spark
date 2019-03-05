@@ -280,7 +280,7 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     }.toArray
     val rdd =
       EventHubsSourceProvider.toInternalRow(
-        new EventHubsRDD(sc, ehConf.trimmed, offsetRanges, ehConf.listener()))
+        new EventHubsRDD(sc, ehConf.trimmed, offsetRanges, ehConf.receiverListener()))
     logInfo(
       "GetBatch generating RDD of offset range: " +
         offsetRanges.sortBy(_.nameAndPartition.toString).mkString(", "))

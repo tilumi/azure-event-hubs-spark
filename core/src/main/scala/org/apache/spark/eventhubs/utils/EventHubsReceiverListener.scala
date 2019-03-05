@@ -1,6 +1,6 @@
 package org.apache.spark.eventhubs.utils
 
-import com.microsoft.azure.eventhubs.{EventData, EventDataBatch}
+import com.microsoft.azure.eventhubs.EventData
 import org.apache.spark.eventhubs.{NameAndPartition, SequenceNumber}
 
 trait EventHubsReceiverListener extends Serializable {
@@ -12,13 +12,5 @@ trait EventHubsReceiverListener extends Serializable {
   def onReceiveFirstEvent(firstEvent: EventData): Unit
 
   def getConstructorParameters: Seq[String]
-
-  def onBatchSendSuccess(eventDataBatch: EventDataBatch, sendElapsedTimeInNanos: Long, retryCount: Int)
-
-  def onBatchSendFail(exception: Throwable)
-
-  def onWriterOpen(partitionId: Long, version: Long)
-
-  def onWriterClose(totalMessageCount: Int, totalMessageSizeInBytes: Int, endToEndElapsedTimeInNanos: Long)
 
 }

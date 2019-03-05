@@ -103,7 +103,7 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
    */
   private def getRunTimeInfoF(partitionId: PartitionId): Future[PartitionRuntimeInformation] = {
     retryJava(client.getPartitionRuntimeInformation(partitionId.toString),
-              s"getRunTimeInfoF for partition: $partitionId")
+              s"getRunTimeInfoF for partition: $partitionId").map(_._1)
   }
 
   /**
@@ -258,7 +258,7 @@ private[spark] class EventHubsClient(private val ehConf: EventHubsConf)
                                                                     pos.convert,
                                                                     DefaultEpoch,
                                                                     receiverOptions),
-                                         "translate: epoch receiver creation.")
+                                         "translate: epoch receiver creation.").map(_._1)
                 receiver
                   .flatMap { r =>
                     r.setReceiveTimeout(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout))

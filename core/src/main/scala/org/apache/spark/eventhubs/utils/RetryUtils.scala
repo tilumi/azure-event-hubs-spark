@@ -86,7 +86,7 @@ private[spark] object RetryUtils extends Logging {
   final def retryJava[T](fn: => CompletableFuture[T],
                          opName: String,
                          maxRetry: Int = RetryCount,
-                         delay: Int = 10): Future[T] = {
+                         delay: Int = 10): Future[(T, Int)] = {
     retryScala(toScala(fn), opName, maxRetry, delay)
   }
 
@@ -107,9 +107,9 @@ private[spark] object RetryUtils extends Logging {
   final def retryScala[T](fn: => Future[T],
                           opName: String,
                           maxRetry: Int = RetryCount,
-                          delay: Int = 10): Future[T] = {
-    def retryHelper(fn: => Future[T], retryCount: Int): Future[T] = {
-      fn.recoverWith {
+                          delay: Int = 10): Future[(T, Int)] = {
+    def retryHelper(fn: => Future[T], retryCount: Int): Future[(T, Int)] = {
+      fn.map((_, retryCount)).recoverWith {
         case eh: EventHubException if eh.getIsTransient =>
           if (retryCount >= maxRetry) {
             logInfo(s"failure: $opName")
@@ -148,12 +148,12 @@ private[spark] object RetryUtils extends Logging {
    * @return the [[Future]] from the provided async operation.
    */
   def retryNotNull[T](fn: => CompletableFuture[T], opName: String): Future[T] = {
-    retryJava(fn, opName).flatMap { result =>
-      if (result == null) {
-        retryNotNull(fn, opName)
-      } else {
-        Future.successful(result)
-      }
+    retryJava(fn, opName).map(_._1).flatMap { result =>
+        if (result == null) {
+          retryNotNull(fn, opName)
+        } else {
+          Future.successful(result)
+        }
     }
   }
 }

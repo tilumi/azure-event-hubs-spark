@@ -86,7 +86,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
                                  receiverOptions),
       "CachedReceiver creation."
     )
-    epochReceiver
+    epochReceiver.map(_._1)
   }
 
   private def lastReceivedOffset(): Future[Long] = {
@@ -149,7 +149,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         // The event still isn't present. It must be (2).
         val info = Await.result(
           retryJava(client.getPartitionRuntimeInformation(nAndP.partitionId.toString),
-                    "partitionRuntime"),
+                    "partitionRuntime").map(_._1),
           ehConf.internalOperationTimeout)
 
         if (requestSeqNo < info.getBeginSequenceNumber &&

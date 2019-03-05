@@ -46,6 +46,9 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
   var totalMessageSizeInBytes = 0
   var totalMessageCount = 0
   var writerOpenTime = 0L
+  var messageSizeInCurrentBatchInBytes = 0
+  var totalBatches = 0
+  var totalRetryTimes = 0
 
   def open(partitionId: Long, version: Long): Boolean = {
     writerOpenTime = System.nanoTime()
@@ -57,12 +60,19 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
 
   def process(body: String): Unit = {
     val event = EventData.create(s"$body".getBytes("UTF-8"))
-    if (!eventDataBatch.tryAdd(event)) {
-      val (messageCount, messageSizeInBytes) = sendBatch(eventDataBatch)
-      totalMessageCount += messageCount
-      totalMessageSizeInBytes += messageSizeInBytes
+    if (eventDataBatch.tryAdd(event)) {
+      messageSizeInCurrentBatchInBytes += event.getBytes.length
+    } else {
+      sendBatch(eventDataBatch, messageSizeInCurrentBatchInBytes)
+      totalMessageCount += eventDataBatch.getSize
+      totalMessageSizeInBytes += messageSizeInCurrentBatchInBytes
+      totalBatches += 1
+
       eventDataBatch = client.createBatch()
-      if(!eventDataBatch.tryAdd(event)) {
+      messageSizeInCurrentBatchInBytes = 0
+      if (eventDataBatch.tryAdd(event)) {
+        messageSizeInCurrentBatchInBytes += event.getBytes.length
+      } else {
         throw new EventHubException(false, "Even single event is too big to fit into a event batch")
       }
     }
@@ -70,37 +80,39 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
 
   def close(errorOrNull: Throwable): Unit = {
     errorOrNull match {
-      case t: Throwable => throw t
+      case t: Throwable =>
+        ehConf.senderListener().foreach(_.onBatchSendFail(t))
+        throw t
       case _ =>
-        val (messageCount, messageSizeInBytes) = sendBatch(eventDataBatch)
-        totalMessageCount += messageCount
-        totalMessageSizeInBytes += messageSizeInBytes
+        sendBatch(eventDataBatch, messageSizeInCurrentBatchInBytes)
+        totalMessageCount += eventDataBatch.getSize
+        totalMessageSizeInBytes += messageSizeInCurrentBatchInBytes
+        totalBatches += 1
         ehConf.senderListener().foreach(_.onWriterClose(
           totalMessageCount,
           totalMessageSizeInBytes,
-          System.nanoTime() - writerOpenTime)
+          totalRetryTimes,
+          System.nanoTime() - writerOpenTime,
+          totalBatches)
         )
         ClientConnectionPool.returnClient(ehConf, client)
     }
   }
 
-  private def sendBatch(currentEventDataBatch: EventDataBatch): (Int, Int) = {
+  private def sendBatch(currentEventDataBatch: EventDataBatch, messageSizeInCurrentBatchInBytes: Int) = {
     val start = System.nanoTime()
     retryJava(client.send(currentEventDataBatch), "ForeachWriter").andThen {
-      case Success((_, retryCount)) =>
+      case Success((_, retryTimes)) =>
         val sendElapsedTimeInNanos = System.nanoTime() - start
         ehConf.senderListener().foreach(_.onBatchSendSuccess(
-          currentEventDataBatch,
+          currentEventDataBatch.getSize,
+          messageSizeInCurrentBatchInBytes,
           sendElapsedTimeInNanos,
-          retryCount
+          retryTimes
         ))
+        totalRetryTimes += retryTimes
       case Failure(exception) =>
         ehConf.senderListener().foreach(_.onBatchSendFail(exception))
     }
-    val messageCount = currentEventDataBatch.getSize
-    val currentSizeField = currentEventDataBatch.getClass.getDeclaredField("currentSize")
-    currentSizeField.setAccessible(true)
-    val messageSizeInBytes = currentSizeField.get(currentEventDataBatch).asInstanceOf[Int]
-    (messageCount, messageSizeInBytes)
   }
 }

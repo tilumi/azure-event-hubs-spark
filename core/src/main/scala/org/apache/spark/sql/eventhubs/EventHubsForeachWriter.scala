@@ -39,21 +39,34 @@ import org.apache.spark.sql.ForeachWriter
  */
 case class EventHubsForeachWriter(ehConf: EventHubsConf) extends ForeachWriter[String] {
   var client: EventHubClient = _
+  var totalMessageSizeInBytes = 0
+  var totalMessageCount = 0
+  var writerOpenTime = 0L
 
   def open(partitionId: Long, version: Long): Boolean = {
+    writerOpenTime = System.nanoTime()
     client = ClientConnectionPool.borrowClient(ehConf)
+    ehConf.senderListener().foreach(_.onWriterOpen(partitionId, version))
     true
   }
 
   def process(body: String): Unit = {
     val event = EventData.create(s"$body".getBytes("UTF-8"))
     retryJava(client.send(event), "ForeachWriter")
+    totalMessageCount += 1
+    totalMessageSizeInBytes += event.getBytes.length
   }
 
   def close(errorOrNull: Throwable): Unit = {
     errorOrNull match {
-      case t: Throwable => throw t
+      case t: Throwable =>
+        ehConf.senderListener().foreach(_.onBatchSendFail(t))
+        throw t
       case _ =>
+        ehConf.senderListener().foreach(_.onWriterClose(
+          totalMessageCount,
+          totalMessageSizeInBytes,
+          System.nanoTime() - writerOpenTime))
         ClientConnectionPool.returnClient(ehConf, client)
     }
   }

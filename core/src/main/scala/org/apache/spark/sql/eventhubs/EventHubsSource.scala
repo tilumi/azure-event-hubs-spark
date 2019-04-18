@@ -58,9 +58,9 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
  * all batches. That way receivers are cached and reused efficiently.
  * This allows events to be prefetched before they're needed by Spark.
  */
-class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
-                                                         parameters: Map[String, String],
-                                                         metadataPath: String)
+class EventHubsSource (sqlContext: SQLContext,
+                       parameters: Map[String, String],
+                       metadataPathOption: Option[String])
     extends Source
     with Logging {
 
@@ -79,50 +79,59 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     Option(parameters.get(MaxEventsPerTriggerKey).map(_.toLong).getOrElse(partitionCount * 1000))
 
   private lazy val initialPartitionSeqNos = {
-    val metadataLog =
-      new HDFSMetadataLog[EventHubsSourceOffset](sqlContext.sparkSession, metadataPath) {
-        override def serialize(metadata: EventHubsSourceOffset, out: OutputStream): Unit = {
-          out.write(0) // SPARK-19517
-          val writer = new BufferedWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))
-          writer.write("v" + VERSION + "\n")
-          writer.write(metadata.json)
-          writer.flush()
-        }
+    metadataPathOption match {
+      case Some(metadataPath) =>
+        val metadataLog = new HDFSMetadataLog[EventHubsSourceOffset](sqlContext.sparkSession, metadataPath) {
+          override def serialize(metadata: EventHubsSourceOffset, out: OutputStream): Unit = {
+            out.write(0) // SPARK-19517
+            val writer = new BufferedWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8))
+            writer.write("v" + VERSION + "\n")
+            writer.write(metadata.json)
+            writer.flush()
+          }
 
-        override def deserialize(in: InputStream): EventHubsSourceOffset = {
-          in.read() // zero byte is read (SPARK-19517)
-          val content = IOUtils.toString(new InputStreamReader(in, StandardCharsets.UTF_8))
-          // HDFSMetadataLog guarantees that it never creates a partial file.
-          assert(content.length != 0)
-          if (content(0) == 'v') {
-            val indexOfNewLine = content.indexOf("\n")
-            if (indexOfNewLine > 0) {
-              val version =
-                parseVersion(content.substring(0, indexOfNewLine), VERSION)
-              EventHubsSourceOffset(SerializedOffset(content.substring(indexOfNewLine + 1)))
+          override def deserialize(in: InputStream): EventHubsSourceOffset = {
+            in.read() // zero byte is read (SPARK-19517)
+            val content = IOUtils.toString(new InputStreamReader(in, StandardCharsets.UTF_8))
+            // HDFSMetadataLog guarantees that it never creates a partial file.
+            assert(content.length != 0)
+            if (content(0) == 'v') {
+              val indexOfNewLine = content.indexOf("\n")
+              if (indexOfNewLine > 0) {
+                val version =
+                  parseVersion(content.substring(0, indexOfNewLine), VERSION)
+                EventHubsSourceOffset(SerializedOffset(content.substring(indexOfNewLine + 1)))
+              } else {
+                throw new IllegalStateException("Log file was malformed.")
+              }
             } else {
-              throw new IllegalStateException("Log file was malformed.")
+              EventHubsSourceOffset(SerializedOffset(content)) // Spark 2.1 log file
             }
-          } else {
-            EventHubsSourceOffset(SerializedOffset(content)) // Spark 2.1 log file
           }
         }
-      }
-
-    metadataLog
-      .get(0)
-      .getOrElse {
-        // translate starting points within ehConf to sequence numbers
+        metadataLog
+          .get(0)
+          .getOrElse {
+            // translate starting points within ehConf to sequence numbers
+            val seqNos = ehClient.translate(ehConf, partitionCount).map {
+              case (pId, seqNo) =>
+                (NameAndPartition(ehName, pId), seqNo)
+            }
+            val offset = EventHubsSourceOffset(seqNos)
+            metadataLog.add(0, offset)
+            logInfo(s"Initial sequence numbers: $seqNos")
+            offset
+          }
+          .partitionToSeqNos
+      case None =>
         val seqNos = ehClient.translate(ehConf, partitionCount).map {
           case (pId, seqNo) =>
             (NameAndPartition(ehName, pId), seqNo)
         }
         val offset = EventHubsSourceOffset(seqNos)
-        metadataLog.add(0, offset)
         logInfo(s"Initial sequence numbers: $seqNos")
-        offset
-      }
-      .partitionToSeqNos
+        offset.partitionToSeqNos
+    }
   }
 
   private var currentSeqNos: Option[Map[NameAndPartition, SequenceNumber]] = None
@@ -228,7 +237,7 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
       currentSeqNos = Some(untilSeqNos)
     }
     if (start.isDefined && start.get == end) {
-      return sqlContext.internalCreateDataFrame(sqlContext.sparkContext.emptyRDD, schema, isStreaming=true)
+      return sqlContext.internalCreateDataFrame(sqlContext.sparkContext.emptyRDD, schema, isStreaming=false)
     }
     val fromSeqNos = start match {
       case Some(prevBatchEndOffset) =>
@@ -284,7 +293,7 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     logInfo(
       "GetBatch generating RDD of offset range: " +
         offsetRanges.sortBy(_.nameAndPartition.toString).mkString(", "))
-    sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = true)
+    sqlContext.internalCreateDataFrame(rdd, schema, isStreaming = false)
   }
 
   /**

@@ -118,11 +118,14 @@ private[spark] class EventHubsRDD(sc: SparkContext,
       } else {
         CachedEventHubsReceiver
       }
-      cachedReceiver.receive(ehConf,
+      val result = cachedReceiver.receive(ehConf,
                              part.nameAndPartition,
                              part.fromSeqNo,
                              (part.untilSeqNo - part.fromSeqNo).toInt,
                              eventHubsReceiverListener)
+      logInfo(s"Done Computing EventHubs ${part.name}, partition ${part.partitionId} " +
+        s"sequence numbers ${part.fromSeqNo} => ${part.untilSeqNo}")
+      result
     }
   }
 }

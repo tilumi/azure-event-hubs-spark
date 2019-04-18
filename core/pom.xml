@@ -23,7 +23,7 @@
   <parent>
     <groupId>io.github.tilumi</groupId>
     <artifactId>azure-eventhubs-spark-parent_2.11</artifactId>
-      <version>v2.3.hack-for-spark-aggregator.1</version>
+      <version>v2.3.hack-for-spark-aggregator.2</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>azure-eventhubs-spark_2.11</artifactId>

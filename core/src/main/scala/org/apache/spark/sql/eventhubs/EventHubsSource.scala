@@ -23,7 +23,6 @@ import java.nio.charset.StandardCharsets
 import org.apache.commons.io.IOUtils
 import org.apache.spark.SparkContext
 import org.apache.spark.eventhubs.rdd.{EventHubsRDD, OffsetRange}
-import org.apache.spark.eventhubs.utils.EventHubsReceiverListener
 import org.apache.spark.eventhubs.{EventHubsConf, NameAndPartition, _}
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.ExecutorCacheTaskLocation

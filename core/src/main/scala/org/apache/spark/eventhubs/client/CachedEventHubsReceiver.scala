@@ -129,7 +129,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     }
 
     val event = awaitReceiveMessage(
-      receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor initial"))
+      receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor initial"), requestSeqNo)
     val receivedSeqNo = event.head.getSystemProperties.getSequenceNumber
 
     if (receivedSeqNo != requestSeqNo) {
@@ -143,7 +143,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       closeReceiver()
       receiver = createReceiver(requestSeqNo)
       val movedEvent = awaitReceiveMessage(
-        receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor move"))
+        receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor move"), requestSeqNo)
       val movedSeqNo = movedEvent.head.getSystemProperties.getSequenceNumber
       if (movedSeqNo != requestSeqNo) {
         // The event still isn't present. It must be (2).
@@ -210,7 +210,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         while(theRest.size < newBatchSize - 1) {
           theRest = theRest ++ awaitReceiveMessage(
             receive(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout),
-              Math.min(500, newBatchSize - 1 - theRest.size), s"receive; $nAndP"))
+              Math.min(500, newBatchSize - 1 - theRest.size), s"receive; $nAndP"), requestSeqNo)
         }
         theRest = theRest.take(newBatchSize - 1)
         // Combine and sort the data.
@@ -250,11 +250,15 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     })
   }
 
-  private def awaitReceiveMessage[T](awaitable: Awaitable[T]): T = {
+  private def awaitReceiveMessage[T](awaitable: Awaitable[T], requestSeqNo: SequenceNumber): T = {
     try {
       Await.result(awaitable, ehConf.internalOperationTimeout)
     } catch {
       case e: AwaitTimeoutException =>
+        logError(
+          s"awaitReceiveMessage call failed with timeout. Event Hub $nAndP, ConsumerGroup ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo")
+
+        receiver = createReceiver(requestSeqNo)
         throw e
     }
   }

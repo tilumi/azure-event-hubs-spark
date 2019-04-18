@@ -58,7 +58,7 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
  * all batches. That way receivers are cached and reused efficiently.
  * This allows events to be prefetched before they're needed by Spark.
  */
-private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
+class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
                                                          parameters: Map[String, String],
                                                          metadataPath: String)
     extends Source
@@ -67,7 +67,7 @@ private[spark] class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
   import EventHubsConf._
   import EventHubsSource._
 
-  private lazy val ehClient = EventHubsSourceProvider.clientFactory(parameters)(ehConf)
+  lazy val ehClient = EventHubsSourceProvider.clientFactory(parameters)(ehConf)
   private lazy val partitionCount: Int = ehClient.partitionCount
 
   private val ehConf = EventHubsConf.toConf(parameters)

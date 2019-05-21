@@ -24,9 +24,12 @@ import com.microsoft.azure.eventhubs.{EventData, EventDataBatch, EventHubClient,
 import org.apache.spark.eventhubs.{ConnectionStringBuilder, EventHubsConf}
 import org.apache.spark.eventhubs._
 import org.apache.spark.eventhubs.utils.RetryUtils._
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.ForeachWriter
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
 
 /**
@@ -43,7 +46,7 @@ import scala.util.{Failure, Success}
   * @param ehConf the [[EventHubsConf]] containing the connection string
   *               for the Event Hub which will receive the sent events
   */
-case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWriter[String] {
+case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWriter[String] with Logging {
   var client: EventHubClient = _
   var eventDataBatch: EventDataBatch = _
   var totalMessageSizeInBytes = 0
@@ -111,26 +114,26 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
 
   private def sendBatch(currentEventDataBatch: EventDataBatch, messageSizeInCurrentBatchInBytes: Int) = {
     val start = System.nanoTime()
-    retryJava(if(currentEventDataBatch != null && currentEventDataBatch.getSize > 0) {
-      client.send(currentEventDataBatch)
-    } else {
-      CompletableFuture.supplyAsync(new Supplier[Void] {
-        override def get(): Void = {
-          null
-        }
-      })
-    }, "ForeachWriter").andThen {
-      case Success((_, retryTimes)) =>
-        val sendElapsedTimeInNanos = System.nanoTime() - start
-        ehConf.senderListener().foreach(_.onBatchSendSuccess(
-          currentEventDataBatch.getSize,
-          messageSizeInCurrentBatchInBytes,
-          sendElapsedTimeInNanos,
-          retryTimes
-        ))
-        totalRetryTimes += retryTimes
-      case Failure(exception) =>
-        ehConf.senderListener().foreach(_.onBatchSendFail(exception))
+    if(currentEventDataBatch != null && currentEventDataBatch.getSize > 0) {
+      Await.result(retryScala(Future {
+        client.sendSync(currentEventDataBatch)
+      }, "EventHubsBatchForeachWriter").andThen({
+        case Success((_, retryTimes)) =>
+          val sendElapsedTimeInNanos = System.nanoTime() - start
+          ehConf
+            .senderListener()
+            .foreach(
+              _.onBatchSendSuccess(
+                currentEventDataBatch.getSize,
+                messageSizeInCurrentBatchInBytes,
+                sendElapsedTimeInNanos,
+                retryTimes
+              ))
+          totalRetryTimes += retryTimes
+        case Failure(exception) =>
+          logError(s"Write data to EventHub  '${ehConf.name}' failed!", exception)
+          ehConf.senderListener().foreach(_.onBatchSendFail(exception))
+      }), Duration.Inf)
     }
   }
 }

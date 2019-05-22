@@ -363,6 +363,22 @@ final class EventHubsConf private (private val connectionStr: String)
     self.get(ReceiveRetryTimes) map (str => Integer.parseInt(str))
   }
 
+  def operationRetryTimes: Option[Int] = {
+    self.get(OperationRetryTimes) map (str => Integer.parseInt(str))
+  }
+
+  def setOperationRetryTimes(times: Int): EventHubsConf = {
+    set(OperationRetryTimes, times)
+  }
+
+  def operationRetryExponentialDelayMs: Option[Int] = {
+    self.get(OperationRetryExponentialDelayMs) map (str => Integer.parseInt(str))
+  }
+
+  def setOperationRetryExponentialDelayMs(times: Int): EventHubsConf = {
+    set(OperationRetryExponentialDelayMs, times)
+  }
+
   /**
    * Set the operation timeout. We will retryJava failures when contacting the
    * EventHubs service for the length of this timeout.
@@ -534,6 +550,8 @@ object EventHubsConf extends Logging {
   val ReceiverTimeoutKey = "eventhubs.receiverTimeout"
   val OperationTimeoutKey = "eventhubs.operationTimeout"
   val ReceiveRetryTimes = "eventhubs.receiveRetryTimes"
+  val OperationRetryTimes = "eventhubs.operationRetryTimes"
+  val OperationRetryExponentialDelayMs = "eventhubs.operationRetryExponentialDelayMs"
   val PrefetchCountKey = "eventhubs.prefetchCount"
   val ThreadPoolSizeKey = "eventhubs.threadPoolSize"
   val MaxEventsPerTriggerKey = "maxEventsPerTrigger"

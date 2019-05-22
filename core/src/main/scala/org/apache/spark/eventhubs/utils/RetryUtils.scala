@@ -108,7 +108,7 @@ private[spark] object RetryUtils extends Logging {
                           opName: String,
                           maxRetry: Int = RetryCount,
                           delay: Int = 10): Future[(T, Int)] = {
-    def retryHelper(fn: => Future[T], retryCount: Int): Future[(T, Int)] = {
+    def retryHelper(fn: => Future[T], retryCount: Int, currentDelay: Int): Future[(T, Int)] = {
       fn.map((_, retryCount)).recoverWith {
         case eh: EventHubException if eh.getIsTransient =>
           if (retryCount >= maxRetry) {
@@ -116,7 +116,7 @@ private[spark] object RetryUtils extends Logging {
             throw eh
           }
           logInfo(s"retrying $opName after $delay ms")
-          after(delay.milliseconds)(retryHelper(fn, retryCount + 1))
+          after(currentDelay.milliseconds)(retryHelper(fn, retryCount + 1, currentDelay * 2))
         case t: Throwable =>
           t.getCause match {
             case eh: EventHubException if eh.getIsTransient =>
@@ -125,14 +125,14 @@ private[spark] object RetryUtils extends Logging {
                 throw eh
               }
               logInfo(s"retrying $opName after $delay ms")
-              after(delay.milliseconds)(retryHelper(fn, retryCount + 1))
+              after(currentDelay.milliseconds)(retryHelper(fn, retryCount + 1, currentDelay * 2))
             case _ =>
               logInfo(s"failure: $opName")
               throw t
           }
       }
     }
-    retryHelper(fn, 0)
+    retryHelper(fn, 0, delay)
   }
 
   /**

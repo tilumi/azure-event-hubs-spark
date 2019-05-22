@@ -117,7 +117,9 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
     if(currentEventDataBatch != null && currentEventDataBatch.getSize > 0) {
       Await.result(retryJava(
         client.send(currentEventDataBatch)
-      , "EventHubsBatchForeachWriter").andThen({
+      , "EventHubsBatchForeachWriter",
+        ehConf.operationRetryTimes.getOrElse(RetryCount),
+        ehConf.operationRetryExponentialDelayMs.getOrElse(10)).andThen({
         case Success((_, retryTimes)) =>
           val sendElapsedTimeInNanos = System.nanoTime() - start
           logInfo(s"Send batch to EventHub success! sent ${currentEventDataBatch.getSize} messages, total messages size $messageSizeInCurrentBatchInBytes bytes, elapsed time: ${sendElapsedTimeInNanos / 1000} milliseconds, retried $retryTimes times")

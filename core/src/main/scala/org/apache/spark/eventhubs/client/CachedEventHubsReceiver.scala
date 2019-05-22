@@ -149,7 +149,9 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         // The event still isn't present. It must be (2).
         val info = Await.result(
           retryJava(client.getPartitionRuntimeInformation(nAndP.partitionId.toString),
-                    "partitionRuntime").map(_._1),
+                    "partitionRuntime",
+            ehConf.operationRetryTimes.getOrElse(RetryCount),
+            ehConf.operationRetryExponentialDelayMs.getOrElse(10)).map(_._1),
           ehConf.internalOperationTimeout)
 
         if (requestSeqNo < info.getBeginSequenceNumber &&

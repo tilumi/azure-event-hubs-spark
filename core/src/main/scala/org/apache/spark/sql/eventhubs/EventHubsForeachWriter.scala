@@ -17,8 +17,8 @@
 
 package org.apache.spark.sql.eventhubs
 
-import com.microsoft.azure.eventhubs.{ EventData, EventHubClient }
-import org.apache.spark.eventhubs.EventHubsConf
+import com.microsoft.azure.eventhubs.{EventData, EventHubClient}
+import org.apache.spark.eventhubs.{EventHubsConf, RetryCount}
 import org.apache.spark.eventhubs.client.ClientConnectionPool
 import org.apache.spark.eventhubs.utils.RetryUtils._
 import org.apache.spark.sql.ForeachWriter
@@ -52,7 +52,9 @@ case class EventHubsForeachWriter(ehConf: EventHubsConf) extends ForeachWriter[S
 
   def process(body: String): Unit = {
     val event = EventData.create(s"$body".getBytes("UTF-8"))
-    retryJava(client.send(event), "ForeachWriter")
+    retryJava(client.send(event), "ForeachWriter",
+      ehConf.operationRetryTimes.getOrElse(RetryCount),
+      ehConf.operationRetryExponentialDelayMs.getOrElse(10))
     totalMessageCount += 1
     totalMessageSizeInBytes += event.getBytes.length
   }

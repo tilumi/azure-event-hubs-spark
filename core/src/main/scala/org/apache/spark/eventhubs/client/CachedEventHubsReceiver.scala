@@ -221,14 +221,14 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           .iterator
         val (result, validate) = sorted.duplicate
         finalResult = Some(result)
+        val receivedBytes = validate.map(_.getBytes.size.toLong).sum
         eventHubsReceiverListener.foreach(listener => {
-          val receivedBytes = validate.map(_.getBytes.size.toLong).sum
           listener.onBatchReceiveSuccess(nAndP, System.currentTimeMillis() - start, batchSize, receivedBytes)
         })
-        newBatchSize
+        (newBatchSize, receivedBytes)
       } match {
-        case Success(receivedSize) =>
-          logInfo(s"Receive succeed, received $receivedSize messages")
+        case Success((receivedMessages, receivedBytes)) =>
+          logInfo(s"Receive succeed, received $receivedMessages messages, $receivedBytes bytes")
         case Failure(exception) =>
           logWarning("Receive failure", exception)
           logInfo(

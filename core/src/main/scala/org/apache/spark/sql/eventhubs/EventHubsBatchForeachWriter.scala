@@ -112,14 +112,15 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
     }
   }
 
-  private def sendBatch(currentEventDataBatch: EventDataBatch, messageSizeInCurrentBatchInBytes: Int) = {
+  private def sendBatch(currentEventDataBatch: EventDataBatch, messageSizeInCurrentBatchInBytes: Int): Unit = {
     val start = System.nanoTime()
     if(currentEventDataBatch != null && currentEventDataBatch.getSize > 0) {
-      Await.result(retryScala(Future {
-        client.sendSync(currentEventDataBatch)
-      }, "EventHubsBatchForeachWriter").andThen({
+      Await.result(retryJava(
+        client.send(currentEventDataBatch)
+      , "EventHubsBatchForeachWriter").andThen({
         case Success((_, retryTimes)) =>
           val sendElapsedTimeInNanos = System.nanoTime() - start
+          logInfo(s"Send batch to EventHub success! sent ${currentEventDataBatch.getSize} messages, total messages size $messageSizeInCurrentBatchInBytes bytes, elapsed time: ${sendElapsedTimeInNanos / 1000} milliseconds, retried $retryTimes times")
           ehConf
             .senderListener()
             .foreach(

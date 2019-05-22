@@ -46,7 +46,7 @@ import scala.util.{Failure, Success}
   * @param ehConf the [[EventHubsConf]] containing the connection string
   *               for the Event Hub which will receive the sent events
   */
-case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWriter[String] with Logging {
+case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWriter[Array[Byte]] with Logging {
   var client: EventHubClient = _
   var eventDataBatch: EventDataBatch = _
   var totalMessageSizeInBytes = 0
@@ -68,8 +68,8 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
     true
   }
 
-  def process(body: String): Unit = {
-    val event = EventData.create(s"$body".getBytes("UTF-8"))
+  def process(body: Array[Byte]): Unit = {
+    val event = EventData.create(body)
     if (eventDataBatch.tryAdd(event)) {
       messageSizeInCurrentBatchInBytes += event.getBytes.length
     } else {

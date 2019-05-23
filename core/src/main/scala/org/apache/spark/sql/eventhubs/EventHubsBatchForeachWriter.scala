@@ -136,6 +136,7 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
         case Failure(exception) =>
           logError(s"Write data to EventHub  '${ehConf.name}' failed!", exception)
           ehConf.senderListener().foreach(_.onBatchSendFail(exception))
+          throw exception
       }), Duration.Inf)
     }
   }

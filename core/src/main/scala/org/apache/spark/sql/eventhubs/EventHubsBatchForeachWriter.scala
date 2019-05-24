@@ -24,6 +24,7 @@ import com.microsoft.azure.eventhubs.{EventData, EventDataBatch, EventHubClient,
 import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import org.apache.spark.eventhubs.{ConnectionStringBuilder, EventHubsConf}
 import org.apache.spark.eventhubs._
+import org.apache.spark.eventhubs.client.ClientConnectionPool
 import org.apache.spark.eventhubs.utils.RetryUtils._
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.ForeachWriter
@@ -59,15 +60,7 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
 
   def open(partitionId: Long, version: Long): Boolean = {
     writerOpenTime = System.nanoTime()
-    val connStr = ConnectionStringBuilder(ehConf.connectionString)
-    connStr.setOperationTimeout(ehConf.operationTimeout.getOrElse(DefaultOperationTimeout))
-    val threadFactory = new BasicThreadFactory
-    .Builder()
-      .namingPattern(s"ehClient-for-${this.getClass.getSimpleName}-${ConnectionStringBuilder(ehConf.connectionString).getNamespace}-${ehConf.name}-%d")
-      .build()
-    client = EventHubClient.createSync(connStr.toString, Executors.
-      newScheduledThreadPool(
-        ehConf.threadPoolSize.getOrElse(DefaultThreadPoolSize), threadFactory))
+    client = ClientConnectionPool.borrowClient(ehConf)
     eventDataBatch = client.createBatch()
     ehConf.senderListener().foreach(_.onWriterOpen(partitionId, version))
     true
@@ -97,7 +90,6 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
     errorOrNull match {
       case t: Throwable =>
         ehConf.senderListener().foreach(_.onBatchSendFail(t))
-        client.closeSync()
         throw t
       case _ =>
         if (eventDataBatch != null && eventDataBatch.getSize > 0) {
@@ -106,7 +98,6 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
           totalMessageSizeInBytes += messageSizeInCurrentBatchInBytes
           totalBatches += 1
         }
-        client.closeSync()
         ehConf.senderListener().foreach(_.onWriterClose(
           totalMessageCount,
           totalMessageSizeInBytes,
@@ -114,6 +105,7 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
           Some(totalRetryTimes),
           Some(totalBatches))
         )
+        ClientConnectionPool.returnClient(ehConf, client)
     }
   }
 

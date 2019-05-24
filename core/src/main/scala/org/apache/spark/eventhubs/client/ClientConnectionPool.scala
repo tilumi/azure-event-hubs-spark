@@ -161,7 +161,7 @@ object ClientThreadPool {
       val keyName = key(ehConf)
       val threadFactory = new BasicThreadFactory
       .Builder()
-        .namingPattern(s"ehClient-for-${this.getClass.getName}-${ConnectionStringBuilder(ehConf.connectionString).getNamespace}-${ehConf.name}-%d")
+        .namingPattern(s"ehClient-for-${this.getClass.getSimpleName}-${ConnectionStringBuilder(ehConf.connectionString).getNamespace}-${ehConf.name}-%d")
         .build()
       pools.getOrElseUpdate(
         keyName,

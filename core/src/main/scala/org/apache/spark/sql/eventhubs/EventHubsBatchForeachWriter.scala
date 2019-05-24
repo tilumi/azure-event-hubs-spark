@@ -21,6 +21,7 @@ import java.util.concurrent.{CompletableFuture, Executors}
 import java.util.function.Supplier
 
 import com.microsoft.azure.eventhubs.{EventData, EventDataBatch, EventHubClient, EventHubException}
+import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import org.apache.spark.eventhubs.{ConnectionStringBuilder, EventHubsConf}
 import org.apache.spark.eventhubs._
 import org.apache.spark.eventhubs.utils.RetryUtils._
@@ -60,9 +61,13 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
     writerOpenTime = System.nanoTime()
     val connStr = ConnectionStringBuilder(ehConf.connectionString)
     connStr.setOperationTimeout(ehConf.operationTimeout.getOrElse(DefaultOperationTimeout))
+    val threadFactory = new BasicThreadFactory
+    .Builder()
+      .namingPattern(s"ehClient-for-${this.getClass.getName}-${ConnectionStringBuilder(ehConf.connectionString).getNamespace}-${ehConf.name}-%d")
+      .build()
     client = EventHubClient.createSync(connStr.toString, Executors.
       newScheduledThreadPool(
-        ehConf.threadPoolSize.getOrElse(DefaultThreadPoolSize)))
+        ehConf.threadPoolSize.getOrElse(DefaultThreadPoolSize), threadFactory))
     eventDataBatch = client.createBatch()
     ehConf.senderListener().foreach(_.onWriterOpen(partitionId, version))
     true

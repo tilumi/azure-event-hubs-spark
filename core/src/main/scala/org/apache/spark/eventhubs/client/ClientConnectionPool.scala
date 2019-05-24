@@ -18,9 +18,10 @@
 package org.apache.spark.eventhubs.client
 
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{ ConcurrentLinkedQueue, Executors, ScheduledExecutorService }
+import java.util.concurrent.{ConcurrentLinkedQueue, Executors, ScheduledExecutorService}
 
 import com.microsoft.azure.eventhubs.EventHubClient
+import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import org.apache.spark.eventhubs._
 import org.apache.spark.internal.Logging
 
@@ -158,9 +159,13 @@ object ClientThreadPool {
   def get(ehConf: EventHubsConf): ScheduledExecutorService = {
     pools.synchronized {
       val keyName = key(ehConf)
+      val threadFactory = new BasicThreadFactory
+      .Builder()
+        .namingPattern(s"ehClient-for-${this.getClass.getName}-${ConnectionStringBuilder(ehConf.connectionString).getNamespace}-${ehConf.name}-%d")
+        .build()
       pools.getOrElseUpdate(
         keyName,
-        Executors.newScheduledThreadPool(ehConf.threadPoolSize.getOrElse(DefaultThreadPoolSize)))
+        Executors.newScheduledThreadPool(ehConf.threadPoolSize.getOrElse(DefaultThreadPoolSize), threadFactory))
     }
   }
 

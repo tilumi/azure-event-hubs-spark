@@ -18,8 +18,10 @@
 package org.apache.spark.eventhubs.client
 
 import java.time.Duration
+import java.util.concurrent.Executors
 
 import com.microsoft.azure.eventhubs._
+import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import org.apache.spark.eventhubs.utils.EventHubsReceiverListener
 import org.apache.spark.eventhubs.utils.RetryUtils.{retryJava, retryNotNull}
 import org.apache.spark.eventhubs.{EventHubsConf, NameAndPartition, SequenceNumber}
@@ -65,7 +67,16 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
 
   import org.apache.spark.eventhubs._
 
-  private lazy val client: EventHubClient = ClientConnectionPool.borrowClient(ehConf)
+  private lazy val client: EventHubClient = {
+    val connStr = ConnectionStringBuilder(ehConf.connectionString)
+    connStr.setOperationTimeout(ehConf.operationTimeout.getOrElse(DefaultOperationTimeout))
+    val threadFactory = new BasicThreadFactory
+    .Builder()
+      .namingPattern(s"ehClient-for-${this.getClass.getSimpleName}-${ConnectionStringBuilder(ehConf.connectionString).getNamespace}-$nAndP-%d")
+      .build()
+    val threadPool = Executors.newScheduledThreadPool(ehConf.threadPoolSize.getOrElse(DefaultThreadPoolSize), threadFactory))
+    EventHubClient.createSync(connStr.toString, threadPool)
+  }
 
   private var receiver: Future[PartitionReceiver] = createReceiver(startSeqNo)
 
@@ -242,7 +253,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           receiver = createReceiver(requestSeqNo)
       }
     }
-    val result = finalResult.getOrElse({
+    finalResult.getOrElse({
       logWarning(
         s"Abandon the partition: " +
           s"${ConnectionStringBuilder(ehConf.connectionString).getEndpoint.getHost}-${nAndP.ehName}:${nAndP.partitionId}, " +
@@ -253,8 +264,6 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       })
       Seq.empty[EventData].iterator
     })
-    ClientConnectionPool.returnClient(ehConf, client)
-    result
   }
 
   private def awaitReceiveMessage[T](awaitable: Awaitable[T], requestSeqNo: SequenceNumber): T = {

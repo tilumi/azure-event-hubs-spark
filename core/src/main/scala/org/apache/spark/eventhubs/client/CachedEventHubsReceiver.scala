@@ -74,7 +74,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     .Builder()
       .namingPattern(s"ehClient-for-${this.getClass.getSimpleName}-${ConnectionStringBuilder(ehConf.connectionString).getNamespace}-$nAndP-%d")
       .build()
-    val threadPool = Executors.newScheduledThreadPool(ehConf.threadPoolSize.getOrElse(DefaultThreadPoolSize), threadFactory))
+    val threadPool = Executors.newScheduledThreadPool(ehConf.threadPoolSize.getOrElse(DefaultThreadPoolSize), threadFactory)
     EventHubClient.createSync(connStr.toString, threadPool)
   }
 

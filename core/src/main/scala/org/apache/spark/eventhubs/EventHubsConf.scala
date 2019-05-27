@@ -503,6 +503,10 @@ final class EventHubsConf private (private val connectionStr: String)
     }
   }
 
+  def namespace: String = {
+    ConnectionStringBuilder(this.connectionString).getNamespace
+  }
+
 
   // The simulated client (and simulated eventhubs) will be used. These
   // can be found in EventHubsTestUtils.

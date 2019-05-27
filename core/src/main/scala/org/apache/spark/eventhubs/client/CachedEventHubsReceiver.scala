@@ -231,11 +231,11 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         (newBatchSize, receivedBytes, elapsed)
       } match {
         case Success((receivedMessages, receivedBytes, elapsed)) =>
-          logInfo(s"Receive succeed, received $receivedMessages messages, $receivedBytes bytes, takes: $elapsed milliseconds, throughput: ${receivedBytes.toDouble / elapsed} bytes / millisecond")
+          logInfo(s"receive succeed for [${ehConf.namespace}:$nAndP], received $receivedMessages messages, $receivedBytes bytes, takes: $elapsed milliseconds, throughput: ${receivedBytes.toDouble / elapsed} bytes / millisecond")
         case Failure(exception) =>
           logWarning("Receive failure", exception)
           logInfo(
-            s"Receive failure. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo")
+            s"Receive failure. Recreating a receiver for [${ehConf.namespace}:$nAndP], ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo")
           closeReceiver()
           receiver = createReceiver(requestSeqNo)
       }

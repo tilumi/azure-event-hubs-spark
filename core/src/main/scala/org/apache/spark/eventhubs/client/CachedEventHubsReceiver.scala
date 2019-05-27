@@ -18,7 +18,7 @@
 package org.apache.spark.eventhubs.client
 
 import java.time.Duration
-import java.util.concurrent.{Executors, ScheduledExecutorService}
+import java.util.concurrent.{Callable, Executors, ScheduledExecutorService}
 
 import com.google.common.cache._
 import com.microsoft.azure.eventhubs._
@@ -95,19 +95,24 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     val (ehClient, _, receiver, _) = CachedEventHubsReceiver.resourceCache
       .get(
         CacheKey(ehConf.connectionString, nAndP.partitionId.toString),
-        () => {
-          val connStr = ConnectionStringBuilder(ehConf.connectionString)
-          connStr.setOperationTimeout(ehConf.operationTimeout.getOrElse(DefaultOperationTimeout))
-          val threadFactory = new BasicThreadFactory.Builder()
-            .namingPattern(s"ehClient-for-${this.getClass.getSimpleName}-${ConnectionStringBuilder(
-              ehConf.connectionString).getNamespace}-${connStr.getEventHubName}-${nAndP.partitionId}-%d")
-            .build()
-          val threadPool = Executors.newScheduledThreadPool(1, threadFactory)
-          val client = EventHubClient.createSync(connStr.toString, threadPool)
-          (EventHubClient.createSync(connStr.toString, threadPool),
-           threadPool,
-           Await.result(createReceiver(client, seqNo), ehConf.internalOperationTimeout),
-            ehConf)
+        new Callable[(EventHubClient, ScheduledExecutorService, PartitionReceiver, EventHubsConf)] {
+          override def call(): (EventHubClient,
+                          ScheduledExecutorService,
+                          PartitionReceiver,
+                          EventHubsConf) = {
+            val connStr = ConnectionStringBuilder(ehConf.connectionString)
+            connStr.setOperationTimeout(ehConf.operationTimeout.getOrElse(DefaultOperationTimeout))
+            val threadFactory = new BasicThreadFactory.Builder()
+              .namingPattern(s"ehClient-for-${this.getClass.getSimpleName}-${ConnectionStringBuilder(
+                ehConf.connectionString).getNamespace}-${connStr.getEventHubName}-${nAndP.partitionId}-%d")
+              .build()
+            val threadPool = Executors.newScheduledThreadPool(1, threadFactory)
+            val client = EventHubClient.createSync(connStr.toString, threadPool)
+            (EventHubClient.createSync(connStr.toString, threadPool),
+              threadPool,
+              Await.result(createReceiver(client, seqNo), ehConf.internalOperationTimeout),
+              ehConf)
+          }
         }
       )
     (ehClient, receiver)
@@ -160,7 +165,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       logInfo(
         s"checkCursor. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, receivedSeqNo: $receivedSeqNo")
       closeReceiver()
-      receiver = receiver(requestSeqNo)
+      receiver = getClientAndReceiver(requestSeqNo)._2
       val movedEvent = awaitReceiveMessage(
         receiveOne(receiver, ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor move"),
         requestSeqNo)
@@ -263,7 +268,11 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           logInfo(
             s"Receive failure. Recreating a receiver for [${ehConf.namespace}:$nAndP], ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo")
           closeReceiver()
-          (client, receiver) = getClientAndReceiver(requestSeqNo)
+          getClientAndReceiver(requestSeqNo) match {
+            case (_client, _receiver) =>
+              client = _client
+              receiver = _receiver
+          }
       }
     }
     finalResult.getOrElse({
@@ -330,15 +339,23 @@ private[spark] object CachedEventHubsReceiver extends CachedReceiver with Loggin
     .newBuilder()
     .maximumSize(32)
     .removalListener(
-      (notification: RemovalNotification[CacheKey, (EventHubClient, ScheduledExecutorService, PartitionReceiver, EventHubsConf)]) => {
-        val (client, executorService, receiver, ehConf) = notification.getValue
-        Try {
-          Await.ready(Future { receiver.closeSync() }, ehConf.internalOperationTimeout)
-          Await.ready(Future { client.closeSync() }, ehConf.internalOperationTimeout)
-          Await.ready(Future { executorService.shutdown() }, ehConf.internalOperationTimeout)
-        } match {
-          case Success(_) =>
-          case Failure(exception) => logError("Close resource failed", exception)
+      new RemovalListener[CacheKey, (EventHubClient, ScheduledExecutorService, PartitionReceiver, EventHubsConf)] {
+        override def onRemoval(
+      notification: RemovalNotification[
+        CacheKey,
+        (EventHubClient,
+         ScheduledExecutorService,
+         PartitionReceiver,
+         EventHubsConf)]): Unit = {
+          val (client, executorService, receiver, ehConf) = notification.getValue
+          Try {
+            Await.ready(Future { receiver.closeSync() }, ehConf.internalOperationTimeout)
+            Await.ready(Future { client.closeSync() }, ehConf.internalOperationTimeout)
+            Await.ready(Future { executorService.shutdown() }, ehConf.internalOperationTimeout)
+          } match {
+            case Success(_) =>
+            case Failure(exception) => logError("Close resource failed", exception)
+          }
         }
       })
     .build()

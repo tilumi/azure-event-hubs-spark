@@ -70,6 +70,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
   private var receiver: Future[PartitionReceiver] = createReceiver(startSeqNo)
 
   private def createReceiver(seqNo: SequenceNumber): Future[PartitionReceiver] = {
+    val start = System.currentTimeMillis()
     logInfo(
       s"creating receiver for Event Hub ${nAndP.ehName} on partition ${nAndP.partitionId}. seqNo: $seqNo")
     val consumerGroup = ehConf.consumerGroup.getOrElse(DefaultConsumerGroup)
@@ -86,6 +87,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
                                  receiverOptions),
       "CachedReceiver creation."
     )
+    logInfo(s"Receiver created, creation takes ${System.currentTimeMillis() - start} milliseconds")
     epochReceiver.map(_._1)
   }
 
@@ -240,7 +242,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           receiver = createReceiver(requestSeqNo)
       }
     }
-    finalResult.getOrElse({
+    val result = finalResult.getOrElse({
       logWarning(
         s"Abandon the partition: " +
           s"${ConnectionStringBuilder(ehConf.connectionString).getEndpoint.getHost}-${nAndP.ehName}:${nAndP.partitionId}, " +
@@ -251,6 +253,8 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       })
       Seq.empty[EventData].iterator
     })
+    ClientConnectionPool.returnClient(ehConf, client)
+    result
   }
 
   private def awaitReceiveMessage[T](awaitable: Awaitable[T], requestSeqNo: SequenceNumber): T = {

@@ -337,7 +337,7 @@ private[spark] object CachedEventHubsReceiver extends CachedReceiver with Loggin
   val resourceCache
     : Cache[CacheKey, (EventHubClient, ScheduledExecutorService, PartitionReceiver, EventHubsConf)] = CacheBuilder
     .newBuilder()
-    .maximumSize(32)
+    .maximumSize(16)
     .removalListener(
       new RemovalListener[CacheKey, (EventHubClient, ScheduledExecutorService, PartitionReceiver, EventHubsConf)] {
         override def onRemoval(
@@ -348,13 +348,31 @@ private[spark] object CachedEventHubsReceiver extends CachedReceiver with Loggin
          PartitionReceiver,
          EventHubsConf)]): Unit = {
           val (client, executorService, receiver, ehConf) = notification.getValue
-          Try {
-            Await.ready(Future { receiver.closeSync() }, ehConf.internalOperationTimeout)
-            Await.ready(Future { client.closeSync() }, ehConf.internalOperationTimeout)
-            Await.ready(Future { executorService.shutdown() }, ehConf.internalOperationTimeout)
-          } match {
-            case Success(_) =>
-            case Failure(exception) => logError("Close resource failed", exception)
+          Future {
+            Try {
+              Await.ready(Future {
+                receiver.closeSync()
+              }, ehConf.internalOperationTimeout)
+            } match {
+              case Success(_) =>
+              case Failure(exception) => logWarning("Close receiver failed", exception)
+            }
+            Try{
+              Await.ready(Future {
+                client.closeSync()
+              }, ehConf.internalOperationTimeout)
+            } match {
+              case Success(_) =>
+              case Failure(exception) => logWarning("Close client failed", exception)
+            }
+            Try{
+              Await.ready(Future {
+                executorService.shutdown()
+              }, ehConf.internalOperationTimeout)
+            } match {
+              case Success(_) =>
+              case Failure(exception) => logWarning("Close thread pool failed", exception)
+            }
           }
         }
       })

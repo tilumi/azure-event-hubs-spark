@@ -108,7 +108,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
               .build()
             val threadPool = Executors.newScheduledThreadPool(1, threadFactory)
             val client = EventHubClient.createSync(connStr.toString, threadPool)
-            (EventHubClient.createSync(connStr.toString, threadPool),
+            (client,
               threadPool,
               Await.result(createReceiver(client, seqNo), ehConf.internalOperationTimeout),
               ehConf)

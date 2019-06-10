@@ -219,6 +219,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     val retryCount = ehConf.receiveRetryTimes.getOrElse(DefaultReceiveRetryTimes)
     var retried = 0
     var finalResult: Option[Iterator[EventData]] = None
+    var finalException: Option[Throwable] = None
     while (retried < retryCount && finalResult.isEmpty) {
       retried += 1
       Try {
@@ -264,6 +265,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           logInfo(
             s"receive succeed for [${ehConf.namespace}:$nAndP], received $receivedMessages messages, $receivedBytes bytes, takes: $elapsed milliseconds, throughput: ${receivedBytes.toDouble / elapsed} bytes / millisecond")
         case Failure(exception) =>
+          finalException = Some(exception)
           logWarning("Receive failure", exception)
           logInfo(
             s"Receive failure. Recreating a receiver for [${ehConf.namespace}:$nAndP], ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo")
@@ -276,15 +278,19 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       }
     }
     finalResult.getOrElse({
-      logWarning(
-        s"Abandon the partition: " +
-          s"${ConnectionStringBuilder(ehConf.connectionString).getEndpoint.getHost}-${nAndP.ehName}:${nAndP.partitionId}, " +
-          s"requestSeqNo: $requestSeqNo, batchSize: $batchSize"
-      )
-      eventHubsReceiverListener.foreach(listener => {
-        listener.onBatchReceiveSkip(nAndP, requestSeqNo, batchSize)
-      })
-      Seq.empty[EventData].iterator
+      val errorMessage = s"failed to read events: " +
+        s"${ConnectionStringBuilder(ehConf.connectionString).getEndpoint.getHost}-${nAndP.ehName}:${nAndP.partitionId}, " +
+        s"requestSeqNo: $requestSeqNo, batchSize: $batchSize"
+      finalException match {
+        case Some(exception) =>
+          logError(
+            errorMessage
+            , exception)
+          throw exception
+        case None =>
+          logError(errorMessage)
+          throw new RuntimeException(errorMessage)
+      }
     })
   }
 
@@ -354,24 +360,24 @@ private[spark] object CachedEventHubsReceiver extends CachedReceiver with Loggin
                 receiver.closeSync()
               }, ehConf.internalOperationTimeout)
             } match {
-              case Success(_) =>
-              case Failure(exception) => logWarning("Close receiver failed", exception)
+              case Success(_) => logInfo(s"receiver closed succeed")
+              case Failure(exception) => logWarning("close receiver failed", exception)
             }
             Try{
               Await.ready(Future {
                 client.closeSync()
               }, ehConf.internalOperationTimeout)
             } match {
-              case Success(_) =>
-              case Failure(exception) => logWarning("Close client failed", exception)
+              case Success(_) => logInfo("client closed succeed")
+              case Failure(exception) => logWarning("close client failed", exception)
             }
             Try{
               Await.ready(Future {
                 executorService.shutdown()
               }, ehConf.internalOperationTimeout)
             } match {
-              case Success(_) =>
-              case Failure(exception) => logWarning("Close thread pool failed", exception)
+              case Success(_) => logInfo("thread pool closed succeed")
+              case Failure(exception) => logWarning("close thread pool failed", exception)
             }
           }
         }

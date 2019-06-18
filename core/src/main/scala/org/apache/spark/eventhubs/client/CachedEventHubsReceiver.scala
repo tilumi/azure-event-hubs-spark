@@ -68,7 +68,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
 
   import org.apache.spark.eventhubs._
 
-  private def getClientAndReceiver(seqNo: SequenceNumber): (EventHubClient, PartitionReceiver) = {
+  private def getClientAndReceiver(seqNo: SequenceNumber, createNew: Boolean = false): (EventHubClient, PartitionReceiver) = {
     def createReceiver(client: EventHubClient,
                        seqNo: SequenceNumber): Future[PartitionReceiver] = {
 
@@ -91,6 +91,9 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       )
       logInfo(s"Receiver created, creation takes ${System.currentTimeMillis() - start} milliseconds")
       epochReceiver.map(_._1)
+    }
+    if (createNew) {
+      CachedEventHubsReceiver.resourceCache.invalidate(CacheKey(ehConf.connectionString, nAndP.partitionId.toString))
     }
     val (ehClient, _, receiver, _) = CachedEventHubsReceiver.resourceCache
       .get(
@@ -139,16 +142,16 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       retryNotNull(receiver.receive(maxEventCount), msg).map(_.asScala)
   }
 
-  private def checkCursor(client: EventHubClient, initialReceiver: PartitionReceiver, requestSeqNo: SequenceNumber): (Future[Iterable[EventData]], PartitionReceiver) = {
+  private def checkCursor(initialClient: EventHubClient, initialReceiver: PartitionReceiver, requestSeqNo: SequenceNumber): (Future[Iterable[EventData]], EventHubClient, PartitionReceiver) = {
     var receiver = initialReceiver
+    var client = initialClient
     val lastReceivedSeqNo = lastReceivedOffset(receiver)
-
 
     if (lastReceivedSeqNo > -1 && lastReceivedSeqNo + 1 != requestSeqNo) {
       logInfo(
         s"checkCursor. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, lastReceivedSeqNo: $lastReceivedSeqNo")
       closeReceiver()
-      receiver = getClientAndReceiver(requestSeqNo)._2
+      (client, receiver) = getClientAndReceiver(requestSeqNo, createNew = true)
     }
 
     val event = awaitReceiveMessage(
@@ -165,7 +168,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       logInfo(
         s"checkCursor. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, receivedSeqNo: $receivedSeqNo")
       closeReceiver()
-      receiver = getClientAndReceiver(requestSeqNo)._2
+      (client, receiver) = getClientAndReceiver(requestSeqNo, createNew = true)
       val movedEvent = awaitReceiveMessage(
         receiveOne(receiver, ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor move"),
         requestSeqNo)
@@ -204,7 +207,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         event
       }
     }
-    (result, receiver)
+    (result, client, receiver)
   }
 
   private def closeReceiver(): Unit = {
@@ -226,8 +229,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         val start = System.currentTimeMillis()
         // Retrieve the events. First, we get the first event in the batch.
         // Then, if the succeeds, we collect the rest of the data.
-        val (firstFuture, newReceiver) = checkCursor(client, receiver, requestSeqNo)
-        receiver = newReceiver
+        val (firstFuture, client, receiver) = checkCursor(client, receiver, requestSeqNo)
         val first = Await.result(firstFuture, ehConf.internalOperationTimeout)
         val firstSeqNo = first.head.getSystemProperties.getSequenceNumber
         val newBatchSize = (requestSeqNo + batchSize - firstSeqNo).toInt
@@ -270,7 +272,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           logInfo(
             s"Receive failure. Recreating a receiver for [${ehConf.namespace}:$nAndP], ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo")
           closeReceiver()
-          getClientAndReceiver(requestSeqNo) match {
+          getClientAndReceiver(requestSeqNo, createNew = true) match {
             case (_client, _receiver) =>
               client = _client
               receiver = _receiver

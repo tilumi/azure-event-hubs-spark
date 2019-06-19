@@ -138,7 +138,7 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     // This contains an array of the following elements:
     // (partition, (earliestSeqNo, latestSeqNo)
     val earliestAndLatest = ehClient.allBoundedSeqNos
-
+    logDebug(s"earliest and latest sequence number of event hub: [${ehConf.namespace}, ${ehConf.name}]: $earliestAndLatest")
     // There is a possibility that data from EventHubs will
     // expire before it can be consumed from Spark. We collect
     // the earliest sequence numbers available in the service
@@ -177,18 +177,23 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
       limit: Long,
       requestedFrom: Map[NameAndPartition, SequenceNumber],
       until: Map[NameAndPartition, SequenceNumber],
-      fromNew: Map[NameAndPartition, SequenceNumber]): Map[NameAndPartition, SequenceNumber] = {
+      earlist: Map[NameAndPartition, SequenceNumber]): Map[NameAndPartition, SequenceNumber] = {
     // if requested sequence number smaller than EventHub starting sequence number,
     // it means desired event has expired from the service, so we should use EventHub starting sequence number.
     val from = requestedFrom.flatMap{
       case (nameAndPartition, _requestedFrom) =>
         Seq(
-          nameAndPartition -> fromNew.get(nameAndPartition).map(newFrom => Math.max(_requestedFrom, newFrom)).get)
+          nameAndPartition -> earlist.get(nameAndPartition).map(earlist => {
+            if (_requestedFrom < earlist) {
+              logWarning(s"Detected requested from :${_requestedFrom} < $earlist, use $earlist as from sequence number, some data will be lost")
+            }
+            Math.max(_requestedFrom, earlist)
+          }).get)
     }
     val sizes = until.flatMap {
       case (nameAndPartition, end) =>
         // If begin isn't defined, something's wrong, but let alert logic in getBatch handle it
-        from.get(nameAndPartition).orElse(fromNew.get(nameAndPartition)).flatMap { begin =>
+        from.get(nameAndPartition).orElse(earlist.get(nameAndPartition)).flatMap { begin =>
           val size = end - begin
           logDebug(s"rateLimit $nameAndPartition size is $size")
           if (size > 0) Some(nameAndPartition -> size) else None
@@ -203,7 +208,7 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
           nameAndPartition -> sizes
             .get(nameAndPartition)
             .map { size =>
-              val begin = from.getOrElse(nameAndPartition, fromNew(nameAndPartition))
+              val begin = from.getOrElse(nameAndPartition, earlist(nameAndPartition))
               val prorate = limit * (size / total)
               logDebug(s"rateLimit $nameAndPartition prorated amount is $prorate")
               // Don't completely starve small partitions

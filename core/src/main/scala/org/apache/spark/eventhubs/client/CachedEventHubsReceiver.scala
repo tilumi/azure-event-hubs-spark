@@ -169,7 +169,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       // 2) Your desired event has expired from the service.
       // First, we'll check for case (1).
       logInfo(
-        s"checkCursor. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, receivedSeqNo: $receivedSeqNo")
+        s"checkCursor. requested sequence number is not match last received sequence number, recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, receivedSeqNo: $receivedSeqNo")
       getClientAndReceiver(requestSeqNo, createNew = true) match {
         case (_client, _receiver) =>
           client = _client
@@ -181,6 +181,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       val movedSeqNo = movedEvent.head.getSystemProperties.getSequenceNumber
       if (movedSeqNo != requestSeqNo) {
         // The event still isn't present. It must be (2).
+        logInfo("The first event not present, the requested event must be expired")
         val info = Await.result(
           retryJava(
             client.getPartitionRuntimeInformation(nAndP.partitionId.toString),

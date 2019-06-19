@@ -175,9 +175,16 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
   /** Proportionally distribute limit number of offsets among partitions */
   private def rateLimit(
       limit: Long,
-      from: Map[NameAndPartition, SequenceNumber],
+      requestedFrom: Map[NameAndPartition, SequenceNumber],
       until: Map[NameAndPartition, SequenceNumber],
       fromNew: Map[NameAndPartition, SequenceNumber]): Map[NameAndPartition, SequenceNumber] = {
+    // if requested sequence number smaller than EventHub starting sequence number,
+    // it means desired event has expired from the service, so we should use EventHub starting sequence number.
+    val from = requestedFrom.flatMap{
+      case (nameAndPartition, _requestedFrom) =>
+        Seq(
+          nameAndPartition -> fromNew.get(nameAndPartition).map(newFrom => Math.max(_requestedFrom, newFrom)).get)
+    }
     val sizes = until.flatMap {
       case (nameAndPartition, end) =>
         // If begin isn't defined, something's wrong, but let alert logic in getBatch handle it
@@ -230,7 +237,7 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     if (start.isDefined && start.get == end) {
       return sqlContext.internalCreateDataFrame(sqlContext.sparkContext.emptyRDD, schema, isStreaming=true)
     }
-    val fromSeqNos = start match {
+    var fromSeqNos = start match {
       case Some(prevBatchEndOffset) =>
         EventHubsSourceOffset.getPartitionSeqNos(prevBatchEndOffset)
       case None =>
@@ -240,7 +247,7 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     if (earliestSeqNos.isEmpty) {
       earliestSeqNos = Some(fromSeqNos)
     }
-    fromSeqNos.map {
+    fromSeqNos = fromSeqNos.map {
       case (nAndP, seqNo) =>
         if (seqNo < earliestSeqNos.get(nAndP)) {
           reportDataLoss(

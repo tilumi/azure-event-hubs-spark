@@ -150,8 +150,11 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     if (lastReceivedSeqNo > -1 && lastReceivedSeqNo + 1 != requestSeqNo) {
       logInfo(
         s"checkCursor. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, lastReceivedSeqNo: $lastReceivedSeqNo")
-      closeReceiver()
-      (client, receiver) = getClientAndReceiver(requestSeqNo, createNew = true)
+      getClientAndReceiver(requestSeqNo, createNew = true) match {
+        case (_client, _receiver) =>
+          client = _client
+          receiver = _receiver
+      }
     }
 
     val event = awaitReceiveMessage(
@@ -167,8 +170,11 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       // First, we'll check for case (1).
       logInfo(
         s"checkCursor. Recreating a receiver for $nAndP, ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo, receivedSeqNo: $receivedSeqNo")
-      closeReceiver()
-      (client, receiver) = getClientAndReceiver(requestSeqNo, createNew = true)
+      getClientAndReceiver(requestSeqNo, createNew = true) match {
+        case (_client, _receiver) =>
+          client = _client
+          receiver = _receiver
+      }
       val movedEvent = awaitReceiveMessage(
         receiveOne(receiver, ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout), "checkCursor move"),
         requestSeqNo)
@@ -210,10 +216,6 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
     (result, client, receiver)
   }
 
-  private def closeReceiver(): Unit = {
-    CachedEventHubsReceiver.resourceCache.invalidate(CacheKey(ehConf.connectionString, nAndP.partitionId.toString))
-  }
-
   private def receive(
       requestSeqNo: SequenceNumber,
       batchSize: Int,
@@ -229,7 +231,12 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         val start = System.currentTimeMillis()
         // Retrieve the events. First, we get the first event in the batch.
         // Then, if the succeeds, we collect the rest of the data.
-        val (firstFuture, client, receiver) = checkCursor(client, receiver, requestSeqNo)
+        val firstFuture = checkCursor(client, receiver, requestSeqNo) match {
+          case (_firstFuture, _client, _receiver) =>
+            client = _client
+            receiver = _receiver
+            _firstFuture
+        }
         val first = Await.result(firstFuture, ehConf.internalOperationTimeout)
         val firstSeqNo = first.head.getSystemProperties.getSequenceNumber
         val newBatchSize = (requestSeqNo + batchSize - firstSeqNo).toInt
@@ -271,7 +278,6 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
           logWarning("Receive failure", exception)
           logInfo(
             s"Receive failure. Recreating a receiver for [${ehConf.namespace}:$nAndP], ${ehConf.consumerGroup}. requestSeqNo: $requestSeqNo")
-          closeReceiver()
           getClientAndReceiver(requestSeqNo, createNew = true) match {
             case (_client, _receiver) =>
               client = _client

@@ -9,7 +9,7 @@ trait EventHubsReceiverListener extends Serializable {
 
   def onBatchReceiveSkip(nAndP: NameAndPartition, requestSeqNo: SequenceNumber, batchSize: Int): Unit
 
-  def onReceiveFirstEvent(firstEvent: EventData): Unit
+  def onReceiveFirstEvent(nAndP: NameAndPartition, firstEvent: EventData): Unit
 
   def getConstructorParameters: Seq[String]
 

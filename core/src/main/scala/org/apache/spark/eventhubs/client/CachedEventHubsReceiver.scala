@@ -241,7 +241,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         val first = Await.result(firstFuture, ehConf.internalOperationTimeout)
         val firstSeqNo = first.head.getSystemProperties.getSequenceNumber
         val newBatchSize = (requestSeqNo + batchSize - firstSeqNo).toInt
-        eventHubsReceiverListener.foreach(_.onReceiveFirstEvent(first.head))
+        eventHubsReceiverListener.foreach(_.onReceiveFirstEvent(nAndP, first.head))
 
         if (newBatchSize <= 0) {
           return Iterator.empty
@@ -267,7 +267,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
         val receivedBytes = validate.map(_.getBytes.size.toLong).sum
         val elapsed = System.currentTimeMillis() - start
         eventHubsReceiverListener.foreach(listener => {
-          listener.onBatchReceiveSuccess(nAndP, elapsed, batchSize, receivedBytes)
+          listener.onBatchReceiveSuccess(nAndP, elapsed, newBatchSize, receivedBytes)
         })
         (newBatchSize, receivedBytes, elapsed)
       } match {

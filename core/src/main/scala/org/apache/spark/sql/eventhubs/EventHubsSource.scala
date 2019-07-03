@@ -30,6 +30,8 @@ import org.apache.spark.scheduler.ExecutorCacheTaskLocation
 import org.apache.spark.sql.execution.streaming.{HDFSMetadataLog, Offset, SerializedOffset, Source}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.json4s.{DefaultFormats, NoTypeHints}
+import org.json4s.jackson.Serialization
 
 /**
  * A [[Source]] that reads data from Event Hubs.
@@ -311,6 +313,11 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
    */
   private def reportDataLoss(message: String): Unit = {
     logWarning(message + s". $InstructionsForPotentialDataLoss")
+  }
+
+  override def toString: String = {
+    implicit val formats: DefaultFormats.type = DefaultFormats
+    Serialization.write(Map("namespace" -> ehConf.namespace, "name" -> ehConf.name))
   }
 }
 

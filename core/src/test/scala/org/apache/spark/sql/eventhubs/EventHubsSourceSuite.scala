@@ -108,7 +108,7 @@ class DummyListener(arg1: String, arg2: String) extends EventHubsReceiverListene
 
   override def onBatchReceiveSkip(nAndP: NameAndPartition, requestSeqNo: SequenceNumber, batchSize: Int): Unit = ???
 
-  override def onReceiveFirstEvent(firstEvent: EventData): Unit = ???
+  override def onReceiveFirstEvent(nameAndPartition: NameAndPartition, firstEvent: EventData): Unit = ???
 
   override def getConstructorParameters: Seq[String] = Seq(arg1, arg2)
 }

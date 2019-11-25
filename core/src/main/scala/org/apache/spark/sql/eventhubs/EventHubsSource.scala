@@ -70,7 +70,7 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
   import EventHubsSource._
 
   lazy val ehClient = EventHubsSourceProvider.clientFactory(parameters)(ehConf)
-  private lazy val partitionCount: Int = ehClient.partitionCount
+  private def partitionCount: Int = ehClient.partitionCount
 
   private val ehConf = EventHubsConf.toConf(parameters)
   private val ehName = ehConf.name
@@ -110,21 +110,22 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
           }
         }
       }
+    val defaultSeqNos = ehClient.translate(ehConf, partitionCount).map {
+      case (pId, seqNo) =>
+        (NameAndPartition(ehName, pId), seqNo)
+    }
 
-    metadataLog
-      .get(0)
-      .getOrElse {
-        // translate starting points within ehConf to sequence numbers
-        val seqNos = ehClient.translate(ehConf, partitionCount).map {
-          case (pId, seqNo) =>
-            (NameAndPartition(ehName, pId), seqNo)
-        }
-        val offset = EventHubsSourceOffset(seqNos)
-        metadataLog.add(0, offset)
-        logInfo(s"Initial sequence numbers: $seqNos")
-        offset
-      }
-      .partitionToSeqNos
+    val seqNos = metadataLog.get(0) match {
+      case Some(checkpoint) =>
+        defaultSeqNos ++ checkpoint.partitionToSeqNos
+      case None =>
+        defaultSeqNos
+    }
+    val offset = EventHubsSourceOffset(seqNos)
+    metadataLog.add(0, offset)
+    logInfo(s"Initial sequence numbers: $seqNos")
+    offset.partitionToSeqNos
+
   }
 
   private var currentSeqNos: Option[Map[NameAndPartition, SequenceNumber]] = None
@@ -149,19 +150,32 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     // If not, we'll report possible data loss.
     earliestSeqNos = Some(earliestAndLatest.map {
       case (p, (e, _)) => NameAndPartition(ehName, p) -> e
-    }.toMap)
+    })
 
     val latest = earliestAndLatest.map {
       case (p, (_, l)) => NameAndPartition(ehName, p) -> l
-    }.toMap
+    }
+
+    val fromSeqNumbers = currentSeqNos match {
+      case Some(currentSeqNumbers) =>
+        if (earliestAndLatest.size > currentSeqNumbers.size) {
+          val defaultSeqNos = ehClient.translate(ehConf, partitionCount).map {
+      case (pId, seqNo) =>
+        (NameAndPartition(ehName, pId), seqNo)
+    }
+          defaultSeqNos ++ currentSeqNumbers
+        } else {
+          currentSeqNumbers
+        }
+      case None =>
+        initialPartitionSeqNos
+    }
 
     val seqNos: Map[NameAndPartition, SequenceNumber] = maxOffsetsPerTrigger match {
       case None =>
         latest
-      case Some(limit) if currentSeqNos.isEmpty =>
-        rateLimit(limit, initialPartitionSeqNos, latest, earliestSeqNos.get)
       case Some(limit) =>
-        rateLimit(limit, currentSeqNos.get, latest, earliestSeqNos.get)
+        rateLimit(limit, fromSeqNumbers, latest, earliestSeqNos.get)
     }
 
     currentSeqNos = Some(seqNos)

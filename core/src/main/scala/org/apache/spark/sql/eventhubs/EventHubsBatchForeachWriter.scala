@@ -17,21 +17,16 @@
 
 package org.apache.spark.sql.eventhubs
 
-import java.util.concurrent.{CompletableFuture, Executors}
-import java.util.function.Supplier
-
 import com.microsoft.azure.eventhubs.{EventData, EventDataBatch, EventHubClient, EventHubException}
-import org.apache.commons.lang3.concurrent.BasicThreadFactory
-import org.apache.spark.eventhubs.{ConnectionStringBuilder, EventHubsConf}
-import org.apache.spark.eventhubs._
+import org.apache.spark.eventhubs.{EventHubsConf, _}
 import org.apache.spark.eventhubs.client.ClientConnectionPool
 import org.apache.spark.eventhubs.utils.RetryUtils._
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.ForeachWriter
+import org.apache.spark.sql.{ForeachWriter, Row}
 
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
 
 /**
@@ -48,7 +43,8 @@ import scala.util.{Failure, Success}
   * @param ehConf the [[EventHubsConf]] containing the connection string
   *               for the Event Hub which will receive the sent events
   */
-case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWriter[Array[Byte]] with Logging {
+case class EventHubsBatchForeachWriter(ehConf: EventHubsConf,
+                                       eventProperties: Map[String, AnyRef]) extends ForeachWriter[Array[Byte]] with Logging {
   var client: EventHubClient = _
   var eventDataBatch: EventDataBatch = _
   var totalMessageSizeInBytes = 0
@@ -66,8 +62,12 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
     true
   }
 
-  def process(body: Array[Byte]): Unit = {
-    val event = EventData.create(body)
+  def process(data: Array[Byte]): Unit = {
+    val event = EventData.create(data)
+    eventProperties.foreach{
+      case (key, value) =>
+      event.getProperties.put(key,value)
+    }
     if (eventDataBatch.tryAdd(event)) {
       messageSizeInCurrentBatchInBytes += event.getBytes.length
     } else {

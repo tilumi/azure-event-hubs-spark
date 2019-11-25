@@ -28,9 +28,9 @@
     <version>9</version>
   </parent>
 
-  <groupId>io.github.tilumi</groupId>
+  <groupId>com.microsoft.datainsights</groupId>
   <artifactId>azure-eventhubs-spark-parent_2.11</artifactId>
-  <version>2.3.64</version>
+  <version>2.3.66</version>
   <packaging>pom</packaging>
 
     <name>EventHubs+Spark Parent POM</name>
@@ -65,73 +65,24 @@
         <module>core</module>
     </modules>
 
-    <distributionManagement>
-        <snapshotRepository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-        </snapshotRepository>
+    <repositories>
         <repository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+            <id>o365exchange-visualstudio-com-o365exchange-ip-engineering</id>
+            <url>https://o365exchange.pkgs.visualstudio.com/_packaging/ip-engineering/maven/v1</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+    <distributionManagement>
+        <repository>
+            <id>o365exchange-visualstudio-com-o365exchange-ip-engineering</id>
+            <url>https://o365exchange.pkgs.visualstudio.com/_packaging/ip-engineering/maven/v1</url>
         </repository>
     </distributionManagement>
-
-    <profiles>
-        <!-- Profile to release a staging version to github. mvn clean deploy -Prelease-to-github -DskipTests-->
-        <profile>
-            <id>release-to-github</id>
-            <distributionManagement>
-                <repository>
-                    <id>github.repo</id>
-                    <name>Temporary Staging Repository</name>
-                    <url>file://${project.build.directory}/mvn-repo</url>
-                </repository>
-            </distributionManagement>
-            <properties>
-                <github.global.server>github</github.global.server>
-            </properties>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>com.github.github</groupId>
-                        <artifactId>site-maven-plugin</artifactId>
-                        <version>0.12</version>
-                        <configuration>
-                            <message>Maven artifacts for ${project.version}</message>
-                            <noJekyll>true</noJekyll>
-                            <outputDirectory>${project.build.directory}/mvn-repo</outputDirectory>
-                            <branch>refs/heads/maven-repo</branch>
-                            <includes>
-                                <include>**/*</include>
-                            </includes>
-                            <repositoryName>azure-event-hubs-spark</repositoryName>
-                            <repositoryOwner>Azure</repositoryOwner>
-                            <merge>true</merge>
-                        </configuration>
-                        <executions>
-                            <!-- run site-maven-plugin's 'site' target as part of the build's normal 'deploy' phase -->
-                            <execution>
-                                <goals>
-                                    <goal>site</goal>
-                                </goals>
-                                <phase>deploy</phase>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-deploy-plugin</artifactId>
-                        <version>2.8.2</version>
-                        <configuration>
-                            <altDeploymentRepository>
-                                internal.repo::default::file://${project.build.directory}/mvn-repo
-                            </altDeploymentRepository>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 
     <scm>
         <connection>scm:git:git:/github.com/Azure/azure-event-hubs-spark.git</connection>
@@ -227,24 +178,6 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.0.2</version>
-                <executions>
-                    <execution>
-                        <id>empty-javadoc-jar</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                        <configuration>
-                            <classifier>javadoc</classifier>
-                            <classesDirectory>${basedir}/javadoc</classesDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <version>2.9.1</version>
                 <executions>
@@ -268,31 +201,6 @@
                         </goals>
                     </execution>
                 </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-gpg-plugin</artifactId>
-                <version>1.5</version>
-                <executions>
-                    <execution>
-                        <id>sign-artifacts</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>sign</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.sonatype.plugins</groupId>
-                <artifactId>nexus-staging-maven-plugin</artifactId>
-                <version>1.6.7</version>
-                <extensions>true</extensions>
-                <configuration>
-                    <serverId>ossrh</serverId>
-                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
-                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
-                </configuration>
             </plugin>
         </plugins>
     </build>

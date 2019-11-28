@@ -81,7 +81,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       receiverOptions.setReceiverRuntimeMetricEnabled(true)
       receiverOptions.setPrefetchCount(ehConf.prefetchCount.getOrElse(DefaultPrefetchCount))
       receiverOptions.setIdentifier(
-        s"spark-${SparkEnv.get.executorId}-${TaskContext.get.taskAttemptId}")
+        s"spark-${Option(SparkEnv.get).map(_.executorId).getOrElse("N/A")}-${Option(TaskContext.get).map(_.taskAttemptId).getOrElse("N/A")}")
       val epochReceiver = retryJava(
         client.createEpochReceiver(consumerGroup,
           nAndP.partitionId.toString,
@@ -121,9 +121,9 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
                       Await.result(createReceiver(client, seqNo), ehConf.internalOperationTimeout),
                       ehConf)
                   },
-                  30 seconds
+                  10 seconds
                 )))(retry.Success(_ != null), global),
-              3 minute
+              1 minute
             )
           }
         }

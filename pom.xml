@@ -28,9 +28,9 @@
     <version>9</version>
   </parent>
 
-  <groupId>io.github.tilumi</groupId>
-  <artifactId>azure-eventhubs-spark-parent_2.11</artifactId>
-  <version>2.3.64</version>
+  <groupId>com.microsoft.datainsights</groupId>
+  <artifactId>azure-eventhubs-spark_2.11</artifactId>
+  <version>2.3.67</version>
   <packaging>pom</packaging>
 
     <name>EventHubs+Spark Parent POM</name>
@@ -61,21 +61,6 @@
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
 
-    <modules>
-        <module>core</module>
-    </modules>
-
-    <distributionManagement>
-        <snapshotRepository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-        </snapshotRepository>
-        <repository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-        </repository>
-    </distributionManagement>
-
     <profiles>
         <!-- Profile to release a staging version to github. mvn clean deploy -Prelease-to-github -DskipTests-->
         <profile>
@@ -93,32 +78,6 @@
             <build>
                 <plugins>
                     <plugin>
-                        <groupId>com.github.github</groupId>
-                        <artifactId>site-maven-plugin</artifactId>
-                        <version>0.12</version>
-                        <configuration>
-                            <message>Maven artifacts for ${project.version}</message>
-                            <noJekyll>true</noJekyll>
-                            <outputDirectory>${project.build.directory}/mvn-repo</outputDirectory>
-                            <branch>refs/heads/maven-repo</branch>
-                            <includes>
-                                <include>**/*</include>
-                            </includes>
-                            <repositoryName>azure-event-hubs-spark</repositoryName>
-                            <repositoryOwner>Azure</repositoryOwner>
-                            <merge>true</merge>
-                        </configuration>
-                        <executions>
-                            <!-- run site-maven-plugin's 'site' target as part of the build's normal 'deploy' phase -->
-                            <execution>
-                                <goals>
-                                    <goal>site</goal>
-                                </goals>
-                                <phase>deploy</phase>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-deploy-plugin</artifactId>
                         <version>2.8.2</version>
@@ -133,13 +92,15 @@
         </profile>
     </profiles>
 
-    <scm>
-        <connection>scm:git:git:/github.com/Azure/azure-event-hubs-spark.git</connection>
-        <developerConnection>scm:git:ssh://github.com/Azure/azure-event-hubs-spark.git</developerConnection>
-        <url>https://github.com/Azure/azure-event-hubs-spark/tree/master</url>
-    </scm>
 
     <dependencies>
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-catalyst_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-streaming_${scala.binary.version}</artifactId>
@@ -187,7 +148,30 @@
             <scope>test</scope>
             <version>3.0.3</version>
         </dependency>
+        <dependency>
+            <groupId>com.softwaremill.retry</groupId>
+            <artifactId>retry_2.11</artifactId>
+            <version>0.3.0</version>
+        </dependency>
     </dependencies>
+    <repositories>
+        <repository>
+            <id>o365exchange-visualstudio-com-o365exchange-ip-engineering</id>
+            <url>https://o365exchange.pkgs.visualstudio.com/_packaging/ip-engineering/maven/v1</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+    <distributionManagement>
+        <repository>
+            <id>o365exchange-visualstudio-com-o365exchange-ip-engineering</id>
+            <url>https://o365exchange.pkgs.visualstudio.com/_packaging/ip-engineering/maven/v1</url>
+        </repository>
+    </distributionManagement>
 
     <build>
         <outputDirectory>target/scala-${scala.binary.version}/classes</outputDirectory>
@@ -227,24 +211,6 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.0.2</version>
-                <executions>
-                    <execution>
-                        <id>empty-javadoc-jar</id>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                        <configuration>
-                            <classifier>javadoc</classifier>
-                            <classesDirectory>${basedir}/javadoc</classesDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <version>2.9.1</version>
                 <executions>
@@ -268,31 +234,6 @@
                         </goals>
                     </execution>
                 </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-gpg-plugin</artifactId>
-                <version>1.5</version>
-                <executions>
-                    <execution>
-                        <id>sign-artifacts</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>sign</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.sonatype.plugins</groupId>
-                <artifactId>nexus-staging-maven-plugin</artifactId>
-                <version>1.6.7</version>
-                <extensions>true</extensions>
-                <configuration>
-                    <serverId>ossrh</serverId>
-                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
-                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
-                </configuration>
             </plugin>
         </plugins>
     </build>

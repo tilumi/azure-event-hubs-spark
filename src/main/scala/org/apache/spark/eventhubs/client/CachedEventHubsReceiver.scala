@@ -33,6 +33,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Await, Awaitable, Future}
 import scala.util.{Failure, Success, Try}
+import scala.concurrent.duration._
 
 private[spark] trait CachedReceiver {
   private[eventhubs] def receive(
@@ -99,22 +100,31 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       .get(
         CacheKey(ehConf.connectionString, nAndP.partitionId.toString),
         new Callable[(EventHubClient, ScheduledExecutorService, PartitionReceiver, EventHubsConf)] {
-          override def call(): (EventHubClient,
-                          ScheduledExecutorService,
-                          PartitionReceiver,
-                          EventHubsConf) = {
+          override def call()
+            : (EventHubClient, ScheduledExecutorService, PartitionReceiver, EventHubsConf) = {
             val connStr = ConnectionStringBuilder(ehConf.connectionString)
             connStr.setOperationTimeout(ehConf.operationTimeout.getOrElse(DefaultOperationTimeout))
             val threadFactory = new BasicThreadFactory.Builder()
-              .namingPattern(s"ehClient-for-${this.getClass.getSimpleName}-${ConnectionStringBuilder(
-                ehConf.connectionString).getNamespace}-${connStr.getEventHubName}-${nAndP.partitionId}-%d")
+              .namingPattern(
+                s"ehClient-for-${this.getClass.getSimpleName}-${ConnectionStringBuilder(
+                  ehConf.connectionString).getNamespace}-${connStr.getEventHubName}-${nAndP.partitionId}-%d")
               .build()
-            val threadPool = Executors.newScheduledThreadPool(1, threadFactory)
-            val client = EventHubClient.createSync(connStr.toString, threadPool)
-            (client,
-              threadPool,
-              Await.result(createReceiver(client, seqNo), ehConf.internalOperationTimeout),
-              ehConf)
+            Await.result(
+              retry
+                .Backoff()
+                .apply(Future(Await.result(
+                  Future {
+                    val threadPool = Executors.newScheduledThreadPool(1, threadFactory)
+                    val client = EventHubClient.createSync(connStr.toString, threadPool)
+                    (client,
+                      threadPool,
+                      Await.result(createReceiver(client, seqNo), ehConf.internalOperationTimeout),
+                      ehConf)
+                  },
+                  30 seconds
+                )))(retry.Success(_ != null), global),
+              3 minute
+            )
           }
         }
       )

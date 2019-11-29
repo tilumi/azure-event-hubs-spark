@@ -17,21 +17,16 @@
 
 package org.apache.spark.sql.eventhubs
 
-import java.util.concurrent.{CompletableFuture, Executors}
-import java.util.function.Supplier
-
 import com.microsoft.azure.eventhubs.{EventData, EventDataBatch, EventHubClient, EventHubException}
-import org.apache.commons.lang3.concurrent.BasicThreadFactory
-import org.apache.spark.eventhubs.{ConnectionStringBuilder, EventHubsConf}
-import org.apache.spark.eventhubs._
+import org.apache.spark.eventhubs.{EventHubsConf, _}
 import org.apache.spark.eventhubs.client.ClientConnectionPool
 import org.apache.spark.eventhubs.utils.RetryUtils._
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.ForeachWriter
 
+import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success, Try}
 
 /**

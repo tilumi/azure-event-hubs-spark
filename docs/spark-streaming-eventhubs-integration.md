@@ -23,7 +23,7 @@ For Scala/Java applications using SBT/Maven project defnitions, link your applic
 ```
   groupId = com.microsoft.azure
   artifactId = azure-eventhubs-spark_2.11
-  version = 2.3.10
+  version = 2.3.13
 ```
 
 For Python applications, you need to add this above library and its dependencies when deploying your application.
@@ -187,7 +187,7 @@ import org.apache.spark.eventhubs.{ EventHubsConf, EventPosition, EventHubsUtils
 
 val connectionString = "YOUR.CONNECTION.STRING"
 val ehConf = EventHubsConf(connectionString)
-  .setStartingPosition(EventPosition.endOfStream)
+  .setStartingPosition(EventPosition.fromEndOfStream)
   .setMaxRatePerPartition(10000)
 
 val stream = EventHubsUtils.createDirectStream(streamingContext, ehConf)

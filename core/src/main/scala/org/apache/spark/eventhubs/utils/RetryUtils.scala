@@ -23,10 +23,9 @@ import com.microsoft.azure.eventhubs.EventHubException
 import org.apache.spark.internal.Logging
 
 import scala.compat.java8.FutureConverters.toScala
-import scala.concurrent.{ ExecutionContext, Future, Promise }
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.duration._
+import scala.concurrent.duration.{ FiniteDuration, _ }
+import scala.concurrent.{ ExecutionContext, Future, Promise }
 
 // TODO tests
 
@@ -86,7 +85,7 @@ private[spark] object RetryUtils extends Logging {
   final def retryJava[T](fn: => CompletableFuture[T],
                          opName: String,
                          maxRetry: Int = RetryCount,
-                         delay: Int = 10): Future[(T, Int)] = {
+                         delay: Int = 10): Future[T] = {
     retryScala(toScala(fn), opName, maxRetry, delay)
   }
 
@@ -107,32 +106,33 @@ private[spark] object RetryUtils extends Logging {
   final def retryScala[T](fn: => Future[T],
                           opName: String,
                           maxRetry: Int = RetryCount,
-                          delay: Int = 10): Future[(T, Int)] = {
-    def retryHelper(fn: => Future[T], retryCount: Int, currentDelay: Int): Future[(T, Int)] = {
-      fn.map((_, retryCount)).recoverWith {
+                          delay: Int = 10): Future[T] = {
+    def retryHelper(fn: => Future[T], retryCount: Int): Future[T] = {
+      val taskId = EventHubsUtils.getTaskId
+      fn.recoverWith {
         case eh: EventHubException if eh.getIsTransient =>
           if (retryCount >= maxRetry) {
-            logInfo(s"failure: $opName")
+            logInfo(s"(TID $taskId) failure: $opName")
             throw eh
           }
-          logInfo(s"retrying $opName after $delay ms")
-          after(currentDelay.milliseconds)(retryHelper(fn, retryCount + 1, currentDelay * 2))
+          logInfo(s"(TID $taskId) retrying $opName after $delay ms")
+          after(delay.milliseconds)(retryHelper(fn, retryCount + 1))
         case t: Throwable =>
           t.getCause match {
             case eh: EventHubException if eh.getIsTransient =>
               if (retryCount >= maxRetry) {
-                logInfo(s"failure: $opName")
+                logInfo(s"(TID $taskId) failure: $opName")
                 throw eh
               }
-              logInfo(s"retrying $opName after $delay ms")
-              after(currentDelay.milliseconds)(retryHelper(fn, retryCount + 1, currentDelay * 2))
+              logInfo(s"(TID $taskId) retrying $opName after $delay ms")
+              after(delay.milliseconds)(retryHelper(fn, retryCount + 1))
             case _ =>
-              logInfo(s"failure: $opName")
+              logInfo(s"(TID $taskId) failure: $opName")
               throw t
           }
       }
     }
-    retryHelper(fn, 0, delay)
+    retryHelper(fn, 0)
   }
 
   /**
@@ -148,7 +148,7 @@ private[spark] object RetryUtils extends Logging {
    * @return the [[Future]] from the provided async operation.
    */
   def retryNotNull[T](fn: => CompletableFuture[T], opName: String): Future[T] = {
-    retryJava(fn, opName).map(_._1).flatMap { result =>
+    retryJava(fn, opName).flatMap { result =>
         if (result == null) {
           retryNotNull(fn, opName)
         } else {

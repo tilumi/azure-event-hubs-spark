@@ -17,28 +17,31 @@
 
 package org.apache.spark.eventhubs
 
-import com.microsoft.azure.eventhubs.EventData
+import java.util.concurrent.CompletableFuture
+
+import com.microsoft.azure.eventhubs.{EventData, EventHubClient, PartitionReceiver, ReceiverOptions, EventPosition => ehep}
+import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.eventhubs.client.EventHubsClient
 import org.apache.spark.eventhubs.rdd.{EventHubsRDD, OffsetRange}
-import org.apache.spark.streaming.StreamingContext
-import org.apache.spark.streaming.eventhubs.EventHubsDirectDStream
-import org.apache.spark.SparkContext
-import org.apache.spark.api.java.{JavaRDD, JavaSparkContext}
 import org.apache.spark.eventhubs.utils.EventHubsReceiverListener
+import org.apache.spark.internal.Logging
+import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.streaming.api.java.{JavaInputDStream, JavaStreamingContext}
+import org.apache.spark.streaming.eventhubs.EventHubsDirectDStream
+import org.apache.spark.{SparkContext, TaskContext}
 
 /**
  * Helper to create Direct DStreams which consume events from Event Hubs.
  */
-object EventHubsUtils {
+object EventHubsUtils extends Logging {
 
   /**
    * Creates a Direct DStream which consumes from  the Event Hubs instance
    * specified in the [[EventHubsConf]].
    *
-   * @param ssc the StreamingContext this DStream belongs to
+   * @param ssc    the StreamingContext this DStream belongs to
    * @param ehConf the parameters for your EventHubs instance
-   * @return An [[EventHubsDirectDStream]]
+   * @return An [[org.apache.spark.streaming.eventhubs.EventHubsDirectDStream]]
    */
   def createDirectStream(ssc: StreamingContext, ehConf: EventHubsConf, eventHubsReceiverListener: Option[EventHubsReceiverListener] = None): EventHubsDirectDStream = {
     new EventHubsDirectDStream(ssc, ehConf, EventHubsClient.apply, eventHubsReceiverListener)
@@ -48,7 +51,7 @@ object EventHubsUtils {
    * Creates a Direct DStream which consumes from  the Event Hubs instance
    * specified in the [[EventHubsConf]].
    *
-   * @param jssc the JavaStreamingContext this DStream belongs to
+   * @param jssc   the JavaStreamingContext this DStream belongs to
    * @param ehConf the parameters for your EventHubs instance
    * @return A [[JavaInputDStream]] containing [[EventData]]
    */
@@ -61,10 +64,10 @@ object EventHubsUtils {
    * Creates an RDD which is contains events from an EventHubs instance.
    * Starting and ending offsets are specified in advance.
    *
-   * @param sc the SparkContext the RDD belongs to
-   * @param ehConf contains EventHubs-specific configurations
+   * @param sc           the SparkContext the RDD belongs to
+   * @param ehConf       contains EventHubs-specific configurations
    * @param offsetRanges offset ranges that define the EventHubs data belonging to this RDD
-   * @return An [[EventHubsRDD]]
+   * @return An [[org.apache.spark.eventhubs.rdd.EventHubsRDD]]
    *
    */
   def createRDD(sc: SparkContext,
@@ -77,8 +80,8 @@ object EventHubsUtils {
    * Creates an RDD which is contains events from an EventHubs instance.
    * Starting and ending offsets are specified in advance.
    *
-   * @param jsc the JavaSparkContext the RDD belongs to
-   * @param ehConf contains EventHubs-specific configurations
+   * @param jsc          the JavaSparkContext the RDD belongs to
+   * @param ehConf       contains EventHubs-specific configurations
    * @param offsetRanges offset ranges that define the EventHubs data belonging to this RDD
    * @return A [[JavaRDD]] containing [[EventData]]
    *
@@ -87,5 +90,36 @@ object EventHubsUtils {
                 ehConf: EventHubsConf,
                 offsetRanges: Array[OffsetRange]): JavaRDD[EventData] = {
     new JavaRDD(createRDD(jsc.sc, ehConf, offsetRanges))
+  }
+
+  def createReceiverInner(
+      client: EventHubClient,
+      useExclusiveReceiver: Boolean,
+      consumerGroup: String,
+      partitionId: String,
+      eventPosition: ehep,
+      receiverOptions: ReceiverOptions): CompletableFuture[PartitionReceiver] = {
+    val taskId = EventHubsUtils.getTaskId
+    logInfo(
+      s"(TID $taskId) creating receiver for Event Hub partition $partitionId, consumer group $consumerGroup " +
+        s"with epoch receiver option $useExclusiveReceiver")
+
+    if (useExclusiveReceiver) {
+      client.createEpochReceiver(consumerGroup,
+                                 partitionId,
+                                 eventPosition,
+                                 DefaultEpoch,
+                                 receiverOptions)
+
+    } else {
+      client.createReceiver(consumerGroup, partitionId, eventPosition, receiverOptions)
+    }
+  }
+
+  def getTaskId: Long = {
+    val taskContext = TaskContext.get()
+    if (taskContext != null) {
+      taskContext.taskAttemptId()
+    } else -1
   }
 }

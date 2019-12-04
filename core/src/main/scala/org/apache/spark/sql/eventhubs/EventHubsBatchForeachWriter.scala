@@ -56,7 +56,6 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
   var writerOpenTime = 0L
   var messageSizeInCurrentBatchInBytes = 0
   var totalBatches = 0
-  var totalRetryTimes = 0
 
   def open(partitionId: Long, version: Long): Boolean = {
     writerOpenTime = System.nanoTime()
@@ -102,7 +101,6 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
           totalMessageCount,
           totalMessageSizeInBytes,
           System.nanoTime() - writerOpenTime,
-          Some(totalRetryTimes),
           Some(totalBatches))
         )
         ClientConnectionPool.returnClient(ehConf, client)
@@ -117,19 +115,17 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf) extends ForeachWri
       , "EventHubsBatchForeachWriter",
         ehConf.operationRetryTimes.getOrElse(RetryCount),
         ehConf.operationRetryExponentialDelayMs.getOrElse(10)).andThen({
-        case Success((_, retryTimes)) =>
+        case Success(_) =>
           val sendElapsedTimeInNanos = System.nanoTime() - start
-          logInfo(s"Send batch to EventHub success! sent ${currentEventDataBatch.getSize} messages, total messages size $messageSizeInCurrentBatchInBytes bytes, elapsed time: ${sendElapsedTimeInNanos / 1000000} milliseconds, retried $retryTimes times, throughput: ${messageSizeInCurrentBatchInBytes / (sendElapsedTimeInNanos / 1000000)} bytes / millisecond")
+          logInfo(s"Send batch to EventHub success! sent ${currentEventDataBatch.getSize} messages, total messages size $messageSizeInCurrentBatchInBytes bytes, elapsed time: ${sendElapsedTimeInNanos / 1000000} milliseconds, throughput: ${messageSizeInCurrentBatchInBytes / (sendElapsedTimeInNanos / 1000000)} bytes / millisecond")
           ehConf
             .senderListener()
             .foreach(
               _.onBatchSendSuccess(
                 currentEventDataBatch.getSize,
                 messageSizeInCurrentBatchInBytes,
-                sendElapsedTimeInNanos,
-                retryTimes
+                sendElapsedTimeInNanos
               ))
-          totalRetryTimes += retryTimes
         case Failure(exception) =>
           logError(s"Write data to EventHub  '${ehConf.name}' failed!", exception)
           ehConf.senderListener().foreach(_.onBatchSendFail(exception))

@@ -65,16 +65,9 @@
         <module>core</module>
     </modules>
 
-    <distributionManagement>
-        <repository>
-            <id>o365exchange-visualstudio-com-o365exchange-ip-engineering</id>
-            <url>https://o365exchange.pkgs.visualstudio.com/_packaging/ip-engineering/maven/v1</url>
-        </repository>
-    </distributionManagement>
-
     <repositories>
         <repository>
-            <id>ip-engineering</id>
+            <id>o365exchange-visualstudio-com-o365exchange-ip-engineering</id>
             <url>https://o365exchange.pkgs.visualstudio.com/_packaging/ip-engineering/maven/v1</url>
             <releases>
                 <enabled>true</enabled>
@@ -84,6 +77,12 @@
             </snapshots>
         </repository>
     </repositories>
+    <distributionManagement>
+        <repository>
+            <id>o365exchange-visualstudio-com-o365exchange-ip-engineering</id>
+            <url>https://o365exchange.pkgs.visualstudio.com/_packaging/ip-engineering/maven/v1</url>
+        </repository>
+    </distributionManagement>
 
     <profiles>
         <!-- Profile to release a staging version to github. mvn clean deploy -Prelease-to-github -DskipTests-->
@@ -163,7 +162,7 @@
         <dependency>
             <groupId>com.microsoft.azure</groupId>
             <artifactId>azure-eventhubs</artifactId>
-            <version>3.0.2</version>
+            <version>2.3.2</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
@@ -195,6 +194,11 @@
             <artifactId>scalatest_${scala.binary.version}</artifactId>
             <scope>test</scope>
             <version>3.0.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.softwaremill.retry</groupId>
+            <artifactId>retry_2.11</artifactId>
+            <version>0.3.0</version>
         </dependency>
     </dependencies>
 

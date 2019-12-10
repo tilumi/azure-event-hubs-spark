@@ -67,7 +67,7 @@
 
     <distributionManagement>
         <repository>
-            <id>ip-engineering</id>
+            <id>o365exchange-visualstudio-com-o365exchange-ip-engineering</id>
             <url>https://o365exchange.pkgs.visualstudio.com/_packaging/ip-engineering/maven/v1</url>
         </repository>
     </distributionManagement>

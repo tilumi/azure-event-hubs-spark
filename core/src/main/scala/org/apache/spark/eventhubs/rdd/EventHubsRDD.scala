@@ -95,7 +95,7 @@ private[spark] class EventHubsRDD(sc: SparkContext,
   }
 
   private def errBeginAfterEnd(part: EventHubsRDDPartition): String =
-    s"The beginning sequence number ${part.fromSeqNo} is larger than the ending " +
+    s"The beginning sequence number ${part.fromSeqNo} is larger than thet ending " +
       s"sequence number ${part.untilSeqNo} for EventHubs ${part.name} on partition " +
       s"${part.partitionId}."
 
@@ -105,13 +105,13 @@ private[spark] class EventHubsRDD(sc: SparkContext,
 
     if (part.fromSeqNo == part.untilSeqNo) {
       logInfo(
-        s"(TID ${context.taskAttemptId()}) Beginning sequence number ${part.fromSeqNo} is equal to the ending sequence " +
+        s"Beginning sequence number ${part.fromSeqNo} is equal to the ending sequence " +
           s"number ${part.untilSeqNo}. Returning empty partition for EH: ${part.name} " +
           s"on partition: ${part.partitionId}")
       Iterator.empty
     } else {
       logInfo(
-        s"(TID ${context.taskAttemptId()}) Computing EventHubs ${part.name}, partition ${part.partitionId} " +
+        s"Computing EventHubs ${part.name}, partition ${part.partitionId} " +
           s"sequence numbers ${part.fromSeqNo} => ${part.untilSeqNo}")
       val cachedReceiver = if (ehConf.useSimulatedClient) {
         SimulatedCachedReceiver

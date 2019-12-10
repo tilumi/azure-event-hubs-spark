@@ -160,7 +160,6 @@ final class EventHubsConf private (private val connectionStr: String)
       "eventhubs.operationTimeout",
       "eventhubs.prefetchCount",
       "eventhubs.threadPoolSize",
-      "eventhubs.useExclusiveReceiver",
       "useSimulatedClient"
     ).map(_.toLowerCase).toSet
 
@@ -454,7 +453,6 @@ final class EventHubsConf private (private val connectionStr: String)
     set(MaxEventsPerTriggerKey, limit)
   }
 
-
   def setReceiverListener(listener: EventHubsReceiverListener): EventHubsConf = {
     set(ReceiverListenerClassKey, listener.getClass.getName)
     val parameters = listener.getConstructorParameters
@@ -510,23 +508,6 @@ final class EventHubsConf private (private val connectionStr: String)
   }
 
 
-
-  /**
-   * Set the size of thread pool.
-   * Default: [[DefaultUseExclusiveReceiver]]
-   *
-   * @param b the flag which specifies whether the connector uses an epoch receiver
-   * @return the updated [[EventHubsConf]] instance
-   */
-  def setUseExclusiveReceiver(b: Boolean): EventHubsConf = {
-    set(UseExclusiveReceiverKey, b)
-  }
-
-  /** The current thread pool size.  */
-  def useExclusiveReceiver: Boolean = {
-    self.get(UseExclusiveReceiverKey).getOrElse(DefaultUseExclusiveReceiver).toBoolean
-  }
-
   // The simulated client (and simulated eventhubs) will be used. These
   // can be found in EventHubsTestUtils.
   private[spark] def setUseSimulatedClient(b: Boolean): EventHubsConf = {
@@ -577,7 +558,6 @@ object EventHubsConf extends Logging {
   val OperationRetryExponentialDelayMs = "eventhubs.operationRetryExponentialDelayMs"
   val PrefetchCountKey = "eventhubs.prefetchCount"
   val ThreadPoolSizeKey = "eventhubs.threadPoolSize"
-  val UseExclusiveReceiverKey = "eventhubs.useExclusiveReceiver"
   val MaxEventsPerTriggerKey = "maxEventsPerTrigger"
   val UseSimulatedClientKey = "useSimulatedClient"
   val ReceiverListenerClassKey = "eventhubs.receiverListenerClass"

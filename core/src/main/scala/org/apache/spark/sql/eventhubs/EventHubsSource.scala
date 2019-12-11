@@ -260,7 +260,16 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     }
     var fromSeqNos = start match {
       case Some(prevBatchEndOffset) =>
-        EventHubsSourceOffset.getPartitionSeqNos(prevBatchEndOffset)
+        val prevOffsets = EventHubsSourceOffset.getPartitionSeqNos(prevBatchEndOffset)
+        if (prevOffsets.size < untilSeqNos.size) {
+          val defaultSeqNos = ehClient.translate(ehConf, partitionCount).map {
+            case (pId, seqNo) =>
+              (NameAndPartition(ehName, pId), seqNo)
+          }
+          defaultSeqNos ++ prevOffsets
+        } else {
+          prevOffsets
+        }
       case None =>
         // we need to
         initialPartitionSeqNos

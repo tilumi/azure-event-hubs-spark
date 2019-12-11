@@ -22,7 +22,7 @@ import org.apache.spark.eventhubs.{EventHubsConf, _}
 import org.apache.spark.eventhubs.client.ClientConnectionPool
 import org.apache.spark.eventhubs.utils.RetryUtils._
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.ForeachWriter
+import org.apache.spark.sql.{ForeachWriter, Row}
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -43,6 +43,7 @@ import scala.util.{Failure, Success, Try}
   * @param ehConf the [[EventHubsConf]] containing the connection string
   *               for the Event Hub which will receive the sent events
   */
+
 case class EventHubsBatchForeachWriter(ehConf: EventHubsConf, eventProperties: Map[String, AnyRef]) extends ForeachWriter[Array[Byte]] with Logging {
   var client: EventHubClient = _
   var eventDataBatch: EventDataBatch = _

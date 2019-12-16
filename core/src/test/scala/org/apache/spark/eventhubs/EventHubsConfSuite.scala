@@ -253,7 +253,6 @@ class EventHubsConfSuite extends FunSuite with BeforeAndAfterAll {
     newConf("eventhubs.operationTimeout")
     newConf("eventhubs.prefetchCount")
     newConf("eventhubs.threadPoolSize")
-    newConf("eventhubs.useExclusiveReceiver")
     intercept[NoSuchElementException] { newConf("maxEventsPerTrigger") }
     newConf("useSimulatedClient")
   }

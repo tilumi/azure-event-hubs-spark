@@ -110,7 +110,6 @@ class DummyListener(arg1: String, arg2: String) extends EventHubsReceiverListene
 
   override def onReceiveFirstEvent(nameAndPartition: NameAndPartition, firstEvent: EventData): Unit = ???
 
-  override def getConstructorParameters: Seq[String] = Seq(arg1, arg2)
 }
 
 class EventHubsSourceSuite extends EventHubsSourceTest {

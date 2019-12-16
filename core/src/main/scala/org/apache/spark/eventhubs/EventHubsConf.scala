@@ -29,6 +29,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration.FiniteDuration
 import scala.language.implicitConversions
 import scala.util.Try
+import org.apache.spark.sql.eventhubs._
 /**
  * Configuration for your EventHubs instance when being used with Apache Spark.
  *
@@ -454,53 +455,19 @@ final class EventHubsConf private (private val connectionStr: String)
   }
 
   def setReceiverListener(listener: EventHubsReceiverListener): EventHubsConf = {
-    set(ReceiverListenerClassKey, listener.getClass.getName)
-    val parameters = listener.getConstructorParameters
-    require(self.get(ReceiverListenerClassKey).isDefined, s"$ReceiverListenerClassKey must be set")
-    require(
-      Try(Class.forName(self.get(ReceiverListenerClassKey).get).getConstructor(Array.fill(parameters.size)(classOf[String]): _*)).isSuccess,
-      s"constructor of ${self.get(ReceiverListenerClassKey).get} with parameters ${parameters.mkString(",")} not found!"
-    )
-    implicit val formats: DefaultFormats.type = DefaultFormats
-    set(ReceiverListenerArgumentsKey, Serialization.write(parameters))
+    set(ReceiverListenerSerializedObjectKey, SerializationUtils.serialize(listener))
   }
 
   def receiverListener(): Option[EventHubsReceiverListener] = {
-    implicit val formats: DefaultFormats.type = DefaultFormats
-    self.get(ReceiverListenerClassKey).map{
-      listenerClass =>
-        val arguments = Serialization.read[Seq[String]](self.get(ReceiverListenerArgumentsKey).get)
-        Class.forName(listenerClass).
-          getConstructor(
-            Array.fill(arguments.length)(classOf[String]): _*
-          ).newInstance(arguments: _*).
-          asInstanceOf[EventHubsReceiverListener]
-    }
+    self.get(ReceiverListenerSerializedObjectKey).map(SerializationUtils.deserialize[EventHubsReceiverListener])
   }
 
   def setSenderListener(listener: EventHubsSenderListener): EventHubsConf = {
-    set(SenderListenerClassKey, listener.getClass.getName)
-    val parameters = listener.getConstructorParameters
-    require(self.get(SenderListenerClassKey).isDefined, s"$SenderListenerClassKey must be set")
-    require(
-      Try(Class.forName(self.get(SenderListenerClassKey).get).getConstructor(Array.fill(parameters.size)(classOf[String]): _*)).isSuccess,
-      s"constructor of ${self.get(SenderListenerClassKey).get} with parameters ${parameters.mkString(",")} not found!"
-    )
-    implicit val formats: DefaultFormats.type = DefaultFormats
-    set(SenderListenerArgumentsKey, Serialization.write(parameters))
+    set(SenderListenerSerializedObjectKey, SerializationUtils.serialize(listener))
   }
 
   def senderListener(): Option[EventHubsSenderListener] = {
-    implicit val formats: DefaultFormats.type = DefaultFormats
-    self.get(SenderListenerClassKey).map{
-      listenerClass =>
-        val arguments = Serialization.read[Seq[String]](self.get(SenderListenerArgumentsKey).get)
-        Class.forName(listenerClass).
-          getConstructor(
-            Array.fill(arguments.length)(classOf[String]): _*
-          ).newInstance(arguments: _*).
-          asInstanceOf[EventHubsSenderListener]
-    }
+    self.get(SenderListenerSerializedObjectKey).map{SerializationUtils.deserialize[EventHubsSenderListener]}
   }
 
   def namespace: String = {
@@ -560,10 +527,8 @@ object EventHubsConf extends Logging {
   val ThreadPoolSizeKey = "eventhubs.threadPoolSize"
   val MaxEventsPerTriggerKey = "maxEventsPerTrigger"
   val UseSimulatedClientKey = "useSimulatedClient"
-  val ReceiverListenerClassKey = "eventhubs.receiverListenerClass"
-  val ReceiverListenerArgumentsKey = "eventhubs.receiverListenerArguments"
-  val SenderListenerClassKey = "eventhubs.senderListenerClass"
-  val SenderListenerArgumentsKey = "eventhubs.senderListenerArguments"
+  val SenderListenerSerializedObjectKey = "eventhubs.senderListenerSerializedObject"
+  val ReceiverListenerSerializedObjectKey = "eventhubs.receiverListenerSerializedObject"
 
   /** Creates an EventHubsConf */
   def apply(connectionString: String) = new EventHubsConf(connectionString)

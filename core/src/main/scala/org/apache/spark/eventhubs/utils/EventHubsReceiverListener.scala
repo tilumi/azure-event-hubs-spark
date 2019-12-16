@@ -11,6 +11,4 @@ trait EventHubsReceiverListener extends Serializable {
 
   def onReceiveFirstEvent(nAndP: NameAndPartition, firstEvent: EventData): Unit
 
-  def getConstructorParameters: Seq[String]
-
 }

@@ -243,7 +243,7 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
    * the start and end [[Offset]]s provided.
    *
    * @param start the start positions (inclusive)
-   * @param end the end positions (exclusive)
+   * @param end   the end positions (exclusive)
    * @return the [[DataFrame]] with Event Hubs data
    */
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
@@ -368,7 +368,11 @@ private[eventhubs] object EventHubsSource {
   }
 
   private def compare(a: ExecutorCacheTaskLocation, b: ExecutorCacheTaskLocation): Boolean = {
-    if (a.host == b.host) { a.executorId > b.executorId } else { a.host > b.host }
+    if (a.host == b.host) {
+      a.executorId > b.executorId
+    } else {
+      a.host > b.host
+    }
   }
 
   /**

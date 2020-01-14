@@ -47,18 +47,20 @@ package object eventhubs {
   val DefaultPrefetchCount: Int = PartitionReceiver.DEFAULT_PREFETCH_COUNT
   val DefaultFailOnDataLoss = "true"
   val DefaultUseSimulatedClient = "false"
+  val DefaultUseExclusiveReceiver = "true"
   val StartingSequenceNumber = 0L
   val DefaultThreadPoolSize = 16
   val DefaultEpoch = 0L
   val RetryCount = 3
   val InternalOperationTimeout: FiniteDuration = 300.seconds
   val DefaultReceiveRetryTimes: Int = 3
+  val WaitInterval = 3000
 
   val OffsetAnnotation = "x-opt-offset"
   val EnqueuedTimeAnnotation = "x-opt-enqueued-time"
   val SequenceNumberAnnotation = "x-opt-sequence-number"
 
-  val SparkConnectorVersion = "2.3.11"
+  val SparkConnectorVersion = "2.3.14.1"
 
   type PartitionId = Int
   val PartitionId: Int.type = Int
@@ -87,5 +89,4 @@ package object eventhubs {
 
     def toSequenceNumber: SequenceNumber = str.toLong
   }
-
 }

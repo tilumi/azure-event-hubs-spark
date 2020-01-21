@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.expressions.{
   UnsafeMapData,
   UnsafeProjection
 }
-import org.apache.spark.sql.eventhubs.UTF8StringHelper.IntWrapper
+import org.apache.spark.unsafe.types.UTF8String.IntWrapper
 import org.apache.spark.sql.types.{ BinaryType, MapType, StringType }
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -90,7 +90,7 @@ private[eventhubs] abstract class EventHubsRowWriter(inputSchema: Seq[Attribute]
       None
     } else {
       val wrapper = new IntWrapper
-      assert(UTF8StringHelper.toInt(partitionId, wrapper))
+      assert(partitionId.toInt(wrapper))
       Some(wrapper.value)
     }
   }

@@ -17,7 +17,9 @@
 
 package org.apache.spark.sql.eventhubs
 
-import com.microsoft.azure.eventhubs.{EventData, EventDataBatch, EventHubClient, EventHubException}
+import java.util.function.Consumer
+
+import com.microsoft.azure.eventhubs._
 import org.apache.spark.eventhubs.{EventHubsConf, _}
 import org.apache.spark.eventhubs.client.ClientConnectionPool
 import org.apache.spark.eventhubs.utils.RetryUtils._
@@ -44,7 +46,9 @@ import scala.util.{Failure, Success, Try}
   *               for the Event Hub which will receive the sent events
   */
 
-case class EventHubsBatchForeachWriter(ehConf: EventHubsConf, eventProperties: Map[String, AnyRef]) extends ForeachWriter[Array[Byte]] with Logging {
+case class EventHubsBatchForeachWriter(ehConf: EventHubsConf,
+                                       eventProperties: Map[String, AnyRef],
+                                       batchOption: Option[BatchOptions] = None) extends ForeachWriter[Array[Byte]] with Logging {
   var client: EventHubClient = _
   var eventDataBatch: EventDataBatch = _
   var totalMessageSizeInBytes = 0
@@ -74,8 +78,16 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf, eventProperties: M
       totalMessageCount += eventDataBatch.getSize
       totalMessageSizeInBytes += messageSizeInCurrentBatchInBytes
       totalBatches += 1
-
-      eventDataBatch = client.createBatch()
+      // max message size is 1MB for EventHub
+      val setMaxMessageSizeConsumer = new Consumer[BatchOptions] {
+        override def accept(t: BatchOptions): Unit = {
+          t.maxMessageSize = 1024 * 1024
+        }
+      }
+      eventDataBatch = batchOption match {
+        case Some(_batchOptions) => client.createBatch(_batchOptions.`with`(setMaxMessageSizeConsumer))
+        case _ => client.createBatch(new BatchOptions().`with`(setMaxMessageSizeConsumer))
+      }
       messageSizeInCurrentBatchInBytes = 0
       if (Try(eventDataBatch.tryAdd(event)).getOrElse(false)) {
         messageSizeInCurrentBatchInBytes += event.getBytes.length

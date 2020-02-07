@@ -464,6 +464,14 @@ final class EventHubsConf private (private val connectionStr: String)
     set(SenderListenerSerializedObjectKey, SerializationUtils.serialize(listener))
   }
 
+  def guaranteeEventOrderingInBatchKey(): Boolean = {
+    self.get(GuaranteeEventOrderingInBatchKey).getOrElse(DefaultGuaranteeEventOrderingInBatch).toBoolean
+  }
+
+  def setGuaranteeEventOrderingInBatchKey(b: Boolean): EventHubsConf = {
+    set(GuaranteeEventOrderingInBatchKey, b)
+  }
+
   def senderListener(): Option[EventHubsSenderListener] = {
     self.get(SenderListenerSerializedObjectKey).map{SerializationUtils.deserialize[EventHubsSenderListener]}
   }
@@ -542,6 +550,7 @@ object EventHubsConf extends Logging {
   val UseExclusiveReceiverKey = "eventhubs.useExclusiveReceiver"
   val MaxEventsPerTriggerKey = "maxEventsPerTrigger"
   val UseSimulatedClientKey = "useSimulatedClient"
+  val GuaranteeEventOrderingInBatchKey = "eventhubs.guaranteeEventOrderingInBatch"
   val SenderListenerSerializedObjectKey = "eventhubs.senderListenerSerializedObject"
   val ReceiverListenerSerializedObjectKey = "eventhubs.receiverListenerSerializedObject"
 

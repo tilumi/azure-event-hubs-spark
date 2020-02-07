@@ -202,8 +202,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
 
   private def receive(requestSeqNo: SequenceNumber, batchSize: Int): Iterator[EventData] = {
     val taskId = EventHubsUtils.getTaskId
-    val startTimeNs = System.nanoTime()
-    def elapsedTimeNs = System.nanoTime() - startTimeNs
+
 
     // Retrieve the events. First, we get the first event in the batch.
     // Then, if the succeeds, we collect the rest of the data.
@@ -216,30 +215,43 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       return Iterator.empty
     }
 
-    val theRest = for { i <- 1 until newBatchSize } yield
-      awaitReceiveMessage(receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout),
-        s"receive; $nAndP; seqNo: ${requestSeqNo + i}"),
-        requestSeqNo)
-    // Combine and sort the data.
-    val combined = first ++ theRest.flatten
-    val sorted = combined.toSeq
-      .sortWith((e1, e2) =>
-        e1.getSystemProperties.getSequenceNumber < e2.getSystemProperties.getSequenceNumber)
-      .iterator
-
-    val (result, validate) = sorted.duplicate
-    val (validateSize, totalBytes) = validate.map(eventData => (1, eventData.getBytes.length.toLong)).reduce{
-      (countAndSize1, countAndSize2) => (countAndSize1._1 + countAndSize2._1, countAndSize1._2 + countAndSize2._2)
+    val eventsIterator: Iterator[EventData] = new Iterator[EventData] {
+      var i = 0
+      var receivedBytes = 0L
+      var elapsedTimeMs = 0L
+      override def hasNext: Boolean = i < newBatchSize
+      override def next(): EventData = {
+        val event = if (i == 0) {
+          first.head
+        } else {
+          val start = System.currentTimeMillis()
+          val eventData = awaitReceiveMessage(receiveOne(ehConf.receiverTimeout.getOrElse(DefaultReceiverTimeout),
+            s"receive; $nAndP; seqNo: ${requestSeqNo + i}"),
+            requestSeqNo).head
+          elapsedTimeMs += (System.currentTimeMillis() - start)
+          eventData
+        }
+        i += 1
+        receivedBytes += event.getBytes.length.toLong
+        if (i == newBatchSize) {
+          logInfo(s"(TID $taskId) Finished receiving for $nAndP, consumer group: ${ehConf.consumerGroup
+            .getOrElse(DefaultConsumerGroup)}, batchSize: $batchSize, elapsed time: $elapsedTimeMs ms")
+          eventHubsReceiverListener.foreach(listener => {
+            listener.onBatchReceiveSuccess(nAndP, elapsedTimeMs, newBatchSize, receivedBytes)
+          })
+        }
+        event
+      }
     }
-    assert(validateSize == newBatchSize)
 
-    val elapsedTimeMs = TimeUnit.NANOSECONDS.toMillis(elapsedTimeNs)
-    logInfo(s"(TID $taskId) Finished receiving for $nAndP, consumer group: ${ehConf.consumerGroup
-      .getOrElse(DefaultConsumerGroup)}, batchSize: $batchSize, elapsed time: $elapsedTimeMs ms")
-    eventHubsReceiverListener.foreach(listener => {
-      listener.onBatchReceiveSuccess(nAndP, elapsedTimeMs, newBatchSize, totalBytes)
-    })
-    result
+    if (ehConf.guaranteeEventOrderingInBatchKey()) {
+      eventsIterator.toSeq.sortWith(
+        (e1, e2) =>
+          e1.getSystemProperties.getSequenceNumber < e2.getSystemProperties.getSequenceNumber
+      ).iterator
+    } else {
+      eventsIterator
+    }
   }
 
   private def awaitReceiveMessage[T](awaitable: Awaitable[T], requestSeqNo: SequenceNumber): T = {

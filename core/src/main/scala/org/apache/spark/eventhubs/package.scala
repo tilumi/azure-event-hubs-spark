@@ -48,6 +48,7 @@ package object eventhubs {
   val DefaultFailOnDataLoss = "true"
   val DefaultUseSimulatedClient = "false"
   val DefaultUseExclusiveReceiver = "true"
+  val DefaultGuaranteeEventOrderingInBatch = "true"
   val StartingSequenceNumber = 0L
   val DefaultThreadPoolSize = 16
   val DefaultEpoch = 0L

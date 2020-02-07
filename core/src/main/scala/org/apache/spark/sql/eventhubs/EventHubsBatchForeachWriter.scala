@@ -81,7 +81,7 @@ case class EventHubsBatchForeachWriter(ehConf: EventHubsConf,
       // max message size is 1MB for EventHub
       val setMaxMessageSizeConsumer = new Consumer[BatchOptions] {
         override def accept(t: BatchOptions): Unit = {
-          t.maxMessageSize = 1024 * 1024
+          t.maxMessageSize = 1020 * 1024
         }
       }
       eventDataBatch = batchOption match {

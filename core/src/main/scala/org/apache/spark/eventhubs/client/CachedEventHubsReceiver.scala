@@ -244,7 +244,7 @@ private[client] class CachedEventHubsReceiver private (ehConf: EventHubsConf,
       }
     }
 
-    if (ehConf.guaranteeEventOrderingInBatchKey()) {
+    if (ehConf.guaranteeEventOrderingInBatch()) {
       eventsIterator.toSeq.sortWith(
         (e1, e2) =>
           e1.getSystemProperties.getSequenceNumber < e2.getSystemProperties.getSequenceNumber

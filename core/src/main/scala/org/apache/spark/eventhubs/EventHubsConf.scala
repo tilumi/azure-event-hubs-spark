@@ -464,11 +464,11 @@ final class EventHubsConf private (private val connectionStr: String)
     set(SenderListenerSerializedObjectKey, SerializationUtils.serialize(listener))
   }
 
-  def guaranteeEventOrderingInBatchKey(): Boolean = {
+  def guaranteeEventOrderingInBatch(): Boolean = {
     self.get(GuaranteeEventOrderingInBatchKey).getOrElse(DefaultGuaranteeEventOrderingInBatch).toBoolean
   }
 
-  def setGuaranteeEventOrderingInBatchKey(b: Boolean): EventHubsConf = {
+  def setGuaranteeEventOrderingInBatch(b: Boolean): EventHubsConf = {
     set(GuaranteeEventOrderingInBatchKey, b)
   }
 

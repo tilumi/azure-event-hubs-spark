@@ -18,19 +18,25 @@
 package org.apache.spark.sql.eventhubs
 
 import java.io._
+import java.net.URI
 import java.nio.charset.StandardCharsets
 
 import org.apache.commons.io.IOUtils
 import org.apache.spark.SparkContext
-import org.apache.spark.eventhubs.rdd.{EventHubsRDD, OffsetRange}
+import org.apache.spark.eventhubs.rdd.{ EventHubsRDD, OffsetRange }
 import org.apache.spark.eventhubs.utils.EventHubsReceiverListener
-import org.apache.spark.eventhubs.{EventHubsConf, NameAndPartition, _}
+import org.apache.spark.eventhubs.{ EventHubsConf, NameAndPartition, _ }
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.ExecutorCacheTaskLocation
-import org.apache.spark.sql.execution.streaming.{HDFSMetadataLog, Offset, SerializedOffset, Source}
+import org.apache.spark.sql.execution.streaming.{
+  HDFSMetadataLog,
+  Offset,
+  SerializedOffset,
+  Source
+}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, SQLContext}
-import org.json4s.{DefaultFormats, NoTypeHints}
+import org.apache.spark.sql.{ DataFrame, SQLContext }
+import org.json4s.{ DefaultFormats, NoTypeHints }
 import org.json4s.jackson.Serialization
 
 /**
@@ -61,8 +67,8 @@ import org.json4s.jackson.Serialization
  * This allows events to be prefetched before they're needed by Spark.
  */
 class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
-                                                         parameters: Map[String, String],
-                                                         metadataPath: String)
+                                          parameters: Map[String, String],
+                                          metadataPath: String)
     extends Source
     with Logging {
 
@@ -72,8 +78,10 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
   lazy val ehClient = EventHubsSourceProvider.clientFactory(parameters)(ehConf)
   private def partitionCount: Int = ehClient.partitionCount
 
-  private val ehConf = EventHubsConf.toConf(parameters)
-  private val ehName = ehConf.name
+  val ehConf: EventHubsConf = EventHubsConf.toConf(parameters)
+  val ehName: String = ehConf.name
+  val consumerGroup: String = ehConf.consumerGroup.getOrElse(DefaultConsumerGroup)
+  val endPoint: URI = ConnectionStringBuilder(ehConf.connectionString).getEndpoint
 
   private val sc = sqlContext.sparkContext
 
@@ -121,7 +129,7 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
       case None =>
         defaultSeqNos
     }
-    val offset = EventHubsSourceOffset(seqNos)
+    val offset = EventHubsSourceOffset(endPoint, consumerGroup, seqNos)
     metadataLog.add(0, offset)
     logInfo(s"Initial sequence numbers: $seqNos")
     offset.partitionToSeqNos
@@ -141,7 +149,8 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     // This contains an array of the following elements:
     // (partition, (earliestSeqNo, latestSeqNo)
     val earliestAndLatest = ehClient.allBoundedSeqNos
-    logDebug(s"earliest and latest sequence number of event hub: [${ehConf.namespace}, ${ehConf.name}]: $earliestAndLatest")
+    logDebug(
+      s"earliest and latest sequence number of event hub: [${ehConf.namespace}, ${ehConf.name}]: $earliestAndLatest")
     // There is a possibility that data from EventHubs will
     // expire before it can be consumed from Spark. We collect
     // the earliest sequence numbers available in the service
@@ -160,9 +169,9 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
       case Some(currentSeqNumbers) =>
         if (earliestAndLatest.size > currentSeqNumbers.size) {
           val defaultSeqNos = ehClient.translate(ehConf, partitionCount).map {
-      case (pId, seqNo) =>
-        (NameAndPartition(ehName, pId), seqNo)
-    }
+            case (pId, seqNo) =>
+              (NameAndPartition(ehName, pId), seqNo)
+          }
           defaultSeqNos ++ currentSeqNumbers
         } else {
           currentSeqNumbers
@@ -179,13 +188,16 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
     }
 
     currentSeqNos = Some(seqNos)
-    logDebug(s"GetOffset: ${seqNos.map {
-      case (nameAndPartition: NameAndPartition, sequenceNumber: SequenceNumber) =>
-        nameAndPartition -> (sequenceNumber, earliestAndLatest(nameAndPartition.partitionId))
-      }.toSeq.map(_.toString).sorted
-    }")
+    logDebug(s"GetOffset: ${seqNos
+      .map {
+        case (nameAndPartition: NameAndPartition, sequenceNumber: SequenceNumber) =>
+          nameAndPartition -> (sequenceNumber, earliestAndLatest(nameAndPartition.partitionId))
+      }
+      .toSeq
+      .map(_.toString)
+      .sorted}")
 
-    Some(EventHubsSourceOffset(seqNos))
+    Some(EventHubsSourceOffset(endPoint, consumerGroup, seqNos))
   }
 
   /** Proportionally distribute limit number of offsets among partitions */
@@ -196,15 +208,19 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
       earlist: Map[NameAndPartition, SequenceNumber]): Map[NameAndPartition, SequenceNumber] = {
     // if requested sequence number smaller than EventHub starting sequence number,
     // it means desired event has expired from the service, so we should use EventHub starting sequence number.
-    val from = requestedFrom.flatMap{
+    val from = requestedFrom.flatMap {
       case (nameAndPartition, _requestedFrom) =>
         Seq(
-          nameAndPartition -> earlist.get(nameAndPartition).map(earlist => {
-            if (_requestedFrom < earlist) {
-              logWarning(s"Detected requested from :${_requestedFrom} < $earlist, use $earlist as from sequence number, some data will be lost")
-            }
-            Math.max(_requestedFrom, earlist)
-          }).get)
+          nameAndPartition -> earlist
+            .get(nameAndPartition)
+            .map(earlist => {
+              if (_requestedFrom < earlist) {
+                logWarning(
+                  s"Detected requested from :${_requestedFrom} < $earlist, use $earlist as from sequence number, some data will be lost")
+              }
+              Math.max(_requestedFrom, earlist)
+            })
+            .get)
     }
     val sizes = until.flatMap {
       case (nameAndPartition, end) =>
@@ -256,7 +272,9 @@ class EventHubsSource private[eventhubs] (sqlContext: SQLContext,
       currentSeqNos = Some(untilSeqNos)
     }
     if (start.isDefined && start.get == end) {
-      return sqlContext.internalCreateDataFrame(sqlContext.sparkContext.emptyRDD, schema, isStreaming=true)
+      return sqlContext.internalCreateDataFrame(sqlContext.sparkContext.emptyRDD,
+                                                schema,
+                                                isStreaming = true)
     }
     var fromSeqNos = start match {
       case Some(prevBatchEndOffset) =>

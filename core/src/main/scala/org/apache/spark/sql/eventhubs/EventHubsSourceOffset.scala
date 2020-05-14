@@ -17,17 +17,24 @@
 
 package org.apache.spark.sql.eventhubs
 
-import org.apache.spark.eventhubs.{ NameAndPartition, SequenceNumber }
+import java.net.URI
+
+import org.apache.spark.eventhubs.{ NameAndPartition, PartitionId, SequenceNumber }
 import org.apache.spark.sql.execution.streaming.{ Offset, SerializedOffset }
+
+case class SerializedEventHubsSourceOffset(endpoint: String,
+                                           consumerGroup: String,
+                                           partitionToSeqNos: Map[String, Map[String, BigInt]])
 
 /**
  * An [[Offset]] for the [[EventHubsSource]]. This tracks all partitions and their offsets.
  */
-case class EventHubsSourceOffset(
-    partitionToSeqNos: Map[NameAndPartition, SequenceNumber])
+case class EventHubsSourceOffset(endpoint: URI,
+                                 consumerGroup: String,
+                                 partitionToSeqNos: Map[NameAndPartition, SequenceNumber])
     extends Offset {
 
-  override val json: String = JsonUtils.partitionSeqNos(partitionToSeqNos)
+  override val json: String = JsonUtils.serializeOffset(this)
 }
 
 /**
@@ -49,15 +56,18 @@ object EventHubsSourceOffset {
    * Creates an [[EventHubsSourceOffset]] from a variable sequence of
    * (Event Hub name, partitionId, sequence number) tuples.
    */
-  def apply(offsetTuples: (String, Int, SequenceNumber)*): EventHubsSourceOffset = {
-    EventHubsSourceOffset(
-      offsetTuples.map { case (n, p, s) => (new NameAndPartition(n, p), s) }.toMap)
+  def apply(endpoint: URI,
+            consumerGroup: String,
+            offsetTuples: (String, Int, SequenceNumber)*): EventHubsSourceOffset = {
+    EventHubsSourceOffset(endpoint, consumerGroup, offsetTuples.map {
+      case (n, p, s) => (new NameAndPartition(n, p), s)
+    }.toMap)
   }
 
   /**
    * Creates an [[EventHubsSourceOffset]] from a JSON [[SerializedOffset]].
    */
   def apply(offset: SerializedOffset): EventHubsSourceOffset = {
-    EventHubsSourceOffset(JsonUtils.partitionSeqNos(offset.json))
+    JsonUtils.deserializeOffset(offset)
   }
 }

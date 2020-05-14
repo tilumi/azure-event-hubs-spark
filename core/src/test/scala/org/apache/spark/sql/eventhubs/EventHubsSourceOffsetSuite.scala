@@ -18,6 +18,7 @@
 package org.apache.spark.sql.eventhubs
 
 import java.io.File
+import java.net.URI
 
 import org.apache.spark.sql.execution.streaming._
 import org.apache.spark.sql.streaming.OffsetSuite
@@ -25,20 +26,26 @@ import org.apache.spark.sql.test.SharedSQLContext
 
 class EventHubsSourceOffsetSuite extends OffsetSuite with SharedSQLContext {
 
-  compare(one = EventHubsSourceOffset(("t", 0, 1L)), two = EventHubsSourceOffset(("t", 0, 2L)))
+  compare(one = EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 1L)),
+          two = EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 2L)))
 
-  compare(one = EventHubsSourceOffset(("t", 0, 1L), ("t", 1, 0L)),
-          two = EventHubsSourceOffset(("t", 0, 2L), ("t", 1, 1L)))
+  compare(
+    one = EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 1L), ("t", 1, 0L)),
+    two = EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 2L), ("t", 1, 1L))
+  )
 
-  compare(one = EventHubsSourceOffset(("t", 0, 1L), ("T", 0, 0L)),
-          two = EventHubsSourceOffset(("t", 0, 2L), ("T", 0, 1L)))
+  compare(
+    one = EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 1L), ("T", 0, 0L)),
+    two = EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 2L), ("T", 0, 1L))
+  )
 
-  compare(one = EventHubsSourceOffset(("t", 0, 1L)),
-          two = EventHubsSourceOffset(("t", 0, 2L), ("t", 1, 1L)))
+  compare(one = EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 1L)),
+          two = EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 2L), ("t", 1, 1L)))
 
-  val ehso1 = EventHubsSourceOffset(("t", 0, 1L))
-  val ehso2 = EventHubsSourceOffset(("t", 0, 2L), ("t", 1, 3L))
-  val ehso3 = EventHubsSourceOffset(("t", 0, 2L), ("t", 1, 3L), ("t", 1, 4L))
+  val ehso1 = EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 1L))
+  val ehso2 = EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 2L), ("t", 1, 3L))
+  val ehso3 =
+    EventHubsSourceOffset(new URI("http://localhost"), "", ("t", 0, 2L), ("t", 1, 3L), ("t", 1, 4L))
 
   compare(EventHubsSourceOffset(SerializedOffset(ehso1.json)),
           EventHubsSourceOffset(SerializedOffset(ehso2.json)))
@@ -90,7 +97,11 @@ class EventHubsSourceOffsetSuite extends OffsetSuite with SharedSQLContext {
     val offset = readFromResource("eventhubs-source-offset-version-2.1.0.txt")
     assert(
       EventHubsSourceOffset(offset) ===
-        EventHubsSourceOffset(("ehName1", 0, 456L), ("ehName1", 1, 789L), ("ehName2", 0, 0L)))
+        EventHubsSourceOffset(new URI("http://localhost"),
+                              "",
+                              ("ehName1", 0, 456L),
+                              ("ehName1", 1, 789L),
+                              ("ehName2", 0, 0L)))
   }
 
   private def readFromResource(file: String): SerializedOffset = {

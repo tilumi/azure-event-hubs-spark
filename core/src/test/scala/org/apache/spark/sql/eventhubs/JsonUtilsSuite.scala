@@ -34,11 +34,11 @@ class JsonUtilsSuite extends SparkFunSuite with SharedSQLContext {
     assert(parsed.toSeq === expected.toSeq)
   }
 
-  test("parsing partitionSeqNos") {
-    val parsed = JsonUtils.partitionSeqNos("""{"nameA":{"0":23,"1":-1},"nameB":{"0":-2}}""")
-
-    assert(parsed(new NameAndPartition("nameA", 0)) === 23)
-    assert(parsed(new NameAndPartition("nameA", 1)) === -1)
-    assert(parsed(new NameAndPartition("nameB", 0)) === -2)
-  }
+//  test("parsing partitionSeqNos") {
+//    val parsed = JsonUtils.partitionSeqNos("""{"nameA":{"0":23,"1":-1},"nameB":{"0":-2}}""")
+//
+//    assert(parsed(new NameAndPartition("nameA", 0)) === 23)
+//    assert(parsed(new NameAndPartition("nameA", 1)) === -1)
+//    assert(parsed(new NameAndPartition("nameB", 0)) === -2)
+//  }
 }

@@ -17,18 +17,35 @@
 
 package org.apache.spark.sql.eventhubs
 
-import java.io.{BufferedWriter, FileInputStream, OutputStream, OutputStreamWriter}
+import java.io.{ BufferedWriter, FileInputStream, OutputStream, OutputStreamWriter }
+import java.net.URI
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.microsoft.azure.eventhubs.{EventData, EventDataBatch}
-import org.apache.qpid.proton.amqp.{Binary, Decimal128, Decimal32, Decimal64, DescribedType, Symbol, UnknownDescribedType, UnsignedByte, UnsignedInteger, UnsignedLong, UnsignedShort}
-import org.apache.spark.eventhubs.utils.{EventHubsReceiverListener, EventHubsTestUtils, SimulatedClient}
-import org.apache.spark.eventhubs.{EventHubsConf, EventPosition, NameAndPartition, SequenceNumber}
+import com.microsoft.azure.eventhubs.{ EventData, EventDataBatch }
+import org.apache.qpid.proton.amqp.{
+  Binary,
+  Decimal128,
+  Decimal32,
+  Decimal64,
+  DescribedType,
+  Symbol,
+  UnknownDescribedType,
+  UnsignedByte,
+  UnsignedInteger,
+  UnsignedLong,
+  UnsignedShort
+}
+import org.apache.spark.eventhubs.utils.{
+  EventHubsReceiverListener,
+  EventHubsTestUtils,
+  SimulatedClient
+}
+import org.apache.spark.eventhubs.{ EventHubsConf, EventPosition, NameAndPartition, SequenceNumber }
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.execution.streaming._
-import org.apache.spark.sql.functions.{count, window}
-import org.apache.spark.sql.streaming.{ProcessingTime, StreamTest}
+import org.apache.spark.sql.functions.{ count, window }
+import org.apache.spark.sql.streaming.{ ProcessingTime, StreamTest }
 import org.apache.spark.sql.test.SharedSQLContext
 import org.apache.spark.util.Utils
 import org.json4s.NoTypeHints
@@ -92,7 +109,7 @@ abstract class EventHubsSourceTest extends StreamTest with SharedSQLContext {
       val seqNos = testUtils.getLatestSeqNos(conf)
       require(seqNos.size == testUtils.getEventHubs(conf.name).partitionCount)
 
-      val offset = EventHubsSourceOffset(seqNos)
+      val offset = EventHubsSourceOffset(new URI("http://localhost"), "", seqNos)
       logInfo(s"Added data, expected offset $offset")
       (ehSource, offset)
     }
@@ -103,12 +120,18 @@ abstract class EventHubsSourceTest extends StreamTest with SharedSQLContext {
   }
 }
 
-class DummyListener(arg1: String, arg2: String) extends EventHubsReceiverListener{
-  override def onBatchReceiveSuccess(nAndP: NameAndPartition, elapsedTime: Long, batchSize: Int, receivedBytes: Long): Unit = ???
+class DummyListener(arg1: String, arg2: String) extends EventHubsReceiverListener {
+  override def onBatchReceiveSuccess(nAndP: NameAndPartition,
+                                     elapsedTime: Long,
+                                     batchSize: Int,
+                                     receivedBytes: Long): Unit = ???
 
-  override def onBatchReceiveSkip(nAndP: NameAndPartition, requestSeqNo: SequenceNumber, batchSize: Int): Unit = ???
+  override def onBatchReceiveSkip(nAndP: NameAndPartition,
+                                  requestSeqNo: SequenceNumber,
+                                  batchSize: Int): Unit = ???
 
-  override def onReceiveFirstEvent(nameAndPartition: NameAndPartition, firstEvent: EventData): Unit = ???
+  override def onReceiveFirstEvent(nameAndPartition: NameAndPartition,
+                                   firstEvent: EventData): Unit = ???
 
 }
 
@@ -168,7 +191,11 @@ class EventHubsSourceSuite extends EventHubsSourceTest {
       testUtils.populateUniformly(eh, 5000)
       val parameters = getEventHubsConf(eh).toMap
 
-      val offset = EventHubsSourceOffset((eh, 0, 0L), (eh, 1, 0L), (eh, 2, 0L))
+      val offset = EventHubsSourceOffset(new URI("http://localhost"),
+                                         "",
+                                         (eh, 0, 0L),
+                                         (eh, 1, 0L),
+                                         (eh, 2, 0L))
       futureMetadataLog.add(0, offset)
 
       val source = new EventHubsSource(sqlContext, parameters, metadataPath.getAbsolutePath)
@@ -493,7 +520,7 @@ class EventHubsSourceSuite extends EventHubsSourceTest {
     query.stop()
   }
 
-  test ("Source can be with a listener") {
+  test("Source can be with a listener") {
 
     val eh = newEventHubs()
     val eventHub = testUtils.createEventHubs(eh, DefaultPartitionCount)
